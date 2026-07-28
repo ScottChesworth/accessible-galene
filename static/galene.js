@@ -1045,11 +1045,6 @@ const unlimitedRate = 1000000000;
 const simulcastRate = 100000;
 const hqAudioRate = 128000;
 
-// STEREO-DEBUG: ping on load so we can confirm fresh code is running.
-fetch('/stereo-debug', {method: 'POST', body: JSON.stringify({
-    where: 'load', ua: navigator.userAgent,
-})}).catch(() => {});
-
 /**
  * Decide whether we want to send simulcast.
  *
@@ -1318,18 +1313,6 @@ async function addLocalMedia(localId) {
     } catch(e) {
         displayError(e);
         return;
-    }
-
-    {
-        let atrack = stream.getAudioTracks()[0];
-        if(atrack)
-            fetch('/stereo-debug', {method: 'POST', body: JSON.stringify({
-                where: 'capture',
-                ua: navigator.userAgent,
-                hqaudio: settings.hqaudio,
-                channelCount: atrack.getSettings().channelCount,
-                label: atrack.label,
-            })}).catch(() => {});
     }
 
     setMediaChoices(true);

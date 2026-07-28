@@ -1427,10 +1427,6 @@ function setStereo(sdp) {
             params += ';sprop-stereo=1';
         lines[i] = `a=fmtp:${m[1]} ${params}`;
     }
-    fetch('/stereo-debug', {method: 'POST', body: JSON.stringify({
-        where: 'sdp', ua: navigator.userAgent, pts: pts,
-        fmtp: lines.filter(l => /^a=fmtp:/.test(l)),
-    })}).catch(() => {});
     return lines.join('\r\n');
 }
 

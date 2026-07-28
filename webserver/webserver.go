@@ -51,7 +51,6 @@ func Serve(address string, dataDir string) error {
 	http.HandleFunc("/ws", wsHandler)
 	http.HandleFunc("/public-groups.json", publicHandler)
 	http.HandleFunc("/galene-api/", apiHandler)
-	http.HandleFunc("/stereo-debug", stereoDebugHandler)
 
 	s := &http.Server{
 		Addr:              address,
@@ -330,22 +329,6 @@ func splitPath(pth string) (string, string, string) {
 		return pth[:index], pth[index+1:], ""
 	}
 	return pth[:index], pth[index+1 : index+1+index2], pth[index+1+index2:]
-}
-
-// stereoDebugHandler logs a small JSON body posted by the client, for
-// temporary stereo diagnostics.  Remove before production.
-func stereoDebugHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 8192))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	log.Printf("STEREO-DEBUG %s", body)
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func groupHandler(w http.ResponseWriter, r *http.Request) {

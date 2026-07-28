@@ -532,27 +532,24 @@ function setButtonsVisibility() {
 function setLocalMute(mute, reflect) {
     muteLocalTracks(mute);
     let button = document.getElementById('mutebutton');
-    let icon = button.querySelector("span .fas");
-    let label = button.querySelector("label");
-    let status = document.getElementById('mutestatus');
+    let icon = button.querySelector('.fas');
+    let text = button.querySelector('.nav-text');
+    // Pressed = microphone on; not pressed = muted.
+    button.setAttribute('aria-pressed', mute ? 'false' : 'true');
     if(mute){
-        icon.classList.add('fa-microphone-slash');
-        icon.classList.remove('fa-microphone');
-        button.classList.add('muted');
-        button.setAttribute('aria-label', 'Microphone muted, activate to unmute');
-        if(label)
-            label.textContent = 'Unmute';
-        if(status)
-            status.textContent = 'Microphone muted';
+        if(icon) {
+            icon.classList.add('fa-microphone-slash');
+            icon.classList.remove('fa-microphone');
+        }
+        if(text)
+            text.textContent = ' Microphone muted';
     } else {
-        icon.classList.remove('fa-microphone-slash');
-        icon.classList.add('fa-microphone');
-        button.classList.remove('muted');
-        button.setAttribute('aria-label', 'Microphone unmuted, activate to mute');
-        if(label)
-            label.textContent = 'Mute';
-        if(status)
-            status.textContent = 'Microphone unmuted';
+        if(icon) {
+            icon.classList.remove('fa-microphone-slash');
+            icon.classList.add('fa-microphone');
+        }
+        if(text)
+            text.textContent = ' Microphone on';
     }
     if(reflect)
         updateSettings({localMute: mute});
@@ -611,19 +608,10 @@ document.getElementById('mutebutton').onclick = function(e) {
     e.preventDefault();
     let localMute = !getSettings().localMute;
     setLocalMute(localMute, true);
-    if(!localMute && !findUpMedia('camera')) {
-        let status = document.getElementById('mutestatus');
-        if(status)
-            status.textContent =
-                'Microphone unmuted, but not started yet; use Enable to start it';
-    }
-};
-
-document.getElementById('mutebutton').onkeydown = function(e) {
-    if(e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        this.onclick(e);
-    }
+    if(!localMute && !findUpMedia('camera'))
+        announcePolite('Microphone unmuted, but not started yet; use Enable to start it');
+    else
+        announcePolite(localMute ? 'Microphone muted' : 'Microphone on');
 };
 
 /**

@@ -634,6 +634,26 @@ getButtonElement('raisehandbutton').onclick = function(e) {
     announcePolite(newRaised ? 'Hand raised' : 'Hand lowered');
 };
 
+/**
+ * Global keyboard shortcuts, active from anywhere in the window:
+ * Ctrl+M toggles the microphone, Ctrl+H toggles the raised hand.  Each
+ * is gated on its button being visible (i.e. the action applies).
+ */
+document.addEventListener('keydown', function(e) {
+    if(e.repeat || !e.ctrlKey || e.altKey || e.metaKey || e.shiftKey)
+        return;
+    let id;
+    switch(e.key.toLowerCase()) {
+    case 'm': id = 'mutebutton'; break;
+    case 'h': id = 'raisehandbutton'; break;
+    default: return;
+    }
+    if(!getVisibility(id))
+        return;
+    e.preventDefault();
+    document.getElementById(id).click();
+});
+
 document.getElementById('sharebutton').onclick = function(e) {
     e.preventDefault();
     addShareMedia();

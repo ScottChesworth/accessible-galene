@@ -191,12 +191,8 @@ function reflectSettings() {
         store = true;
     }
 
-    if(settings.hasOwnProperty('hqaudio')) {
+    if(settings.hasOwnProperty('hqaudio'))
         getInputElement('hqaudiobox').checked = settings.hqaudio;
-    } else {
-        settings.hqaudio = getInputElement('hqaudiobox').checked;
-        store = true;
-    }
 
     if(store)
         storeSettings(settings);
@@ -2410,6 +2406,16 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
         closeSafariStream();
         this.close();
         return;
+    }
+
+    // Operators typically present mixes, so default them to high-quality
+    // stereo audio unless the user has explicitly chosen a value.
+    if(serverConnection.permissions.indexOf('op') >= 0 &&
+       getSettings().hqaudio === undefined) {
+        updateSettings({hqaudio: true});
+        let box = getInputElement('hqaudiobox');
+        if(box)
+            box.checked = true;
     }
 
     let input = /** @type{HTMLTextAreaElement} */

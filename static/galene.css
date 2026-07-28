@@ -1428,3 +1428,20 @@ header .collapse:hover {
 .toastify.info .toast-close {
     color: #000;
 }
+
+/* Audio-only build: hide video-related controls.  The camera is never
+   requested (see addLocalMedia); these are hidden to keep the UI purely
+   audio and reduce clutter for screen-reader users. */
+#sharebutton,
+label[for="videoselect"],
+#videoselect,
+#filterform,
+#sendform,
+#simulcastform,
+#requestform {
+    display: none !important;
+}
+#mediaoptions form:has(#mirrorbox),
+#mediaoptions form:has(#blackboardbox) {
+    display: none !important;
+}

@@ -1269,7 +1269,8 @@ async function addLocalMedia(localId) {
     /** @type{boolean|MediaTrackConstraints} */
     let audio = settings.audio ? {deviceId: settings.audio} : false;
     /** @type{boolean|MediaTrackConstraints} */
-    let video = settings.video ? {deviceId: settings.video} : false;
+    // Audio-only build: never request the camera, for privacy.
+    let video = false;
 
     if(video) {
         let resolution = settings.resolution;
@@ -3916,9 +3917,7 @@ document.getElementById('loginform').onsubmit = async function(e) {
 
     setVisibility('passwordform', true);
 
-    if(getInputElement('presentboth').checked)
-        presentRequested = 'both';
-    else if(getInputElement('presentmike').checked)
+    if(getInputElement('presentmike').checked)
         presentRequested = 'mike';
     else
         presentRequested = null;

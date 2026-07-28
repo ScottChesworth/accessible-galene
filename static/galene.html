@@ -47,10 +47,11 @@
                   </button>
                 </li>
                 <li>
-                  <div id="mutebutton" class="nav-link nav-button">
+                  <div id="mutebutton" class="nav-link nav-button" role="button" tabindex="0" aria-label="Microphone">
                     <span><i class="fas fa-microphone-slash" aria-hidden="true"></i></span>
-                    <label>Mute</label>
+                    <label aria-hidden="true">Mute</label>
                   </div>
+                  <span id="mutestatus" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></span>
                 </li>
                 <li>
                   <div id="sharebutton" class="invisible nav-link nav-button">

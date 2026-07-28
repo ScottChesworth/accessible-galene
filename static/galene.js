@@ -535,14 +535,26 @@ function setLocalMute(mute, reflect) {
     muteLocalTracks(mute);
     let button = document.getElementById('mutebutton');
     let icon = button.querySelector("span .fas");
+    let label = button.querySelector("label");
+    let status = document.getElementById('mutestatus');
     if(mute){
         icon.classList.add('fa-microphone-slash');
         icon.classList.remove('fa-microphone');
         button.classList.add('muted');
+        button.setAttribute('aria-label', 'Microphone muted, activate to unmute');
+        if(label)
+            label.textContent = 'Unmute';
+        if(status)
+            status.textContent = 'Microphone muted';
     } else {
         icon.classList.remove('fa-microphone-slash');
         icon.classList.add('fa-microphone');
         button.classList.remove('muted');
+        button.setAttribute('aria-label', 'Microphone unmuted, activate to mute');
+        if(label)
+            label.textContent = 'Mute';
+        if(status)
+            status.textContent = 'Microphone unmuted';
     }
     if(reflect)
         updateSettings({localMute: mute});
@@ -599,12 +611,20 @@ getInputElement('hqaudiobox').onchange = function(e) {
 
 document.getElementById('mutebutton').onclick = function(e) {
     e.preventDefault();
-    let localMute = getSettings().localMute;
-    if (localMute && !findUpMedia('camera')) {
-        displayMessage('Please use Enable to enable your camera or microphone.');
-    } else {
-        localMute = !localMute;
-        setLocalMute(localMute, true);
+    let localMute = !getSettings().localMute;
+    setLocalMute(localMute, true);
+    if(!localMute && !findUpMedia('camera')) {
+        let status = document.getElementById('mutestatus');
+        if(status)
+            status.textContent =
+                'Microphone unmuted, but not started yet; use Enable to start it';
+    }
+};
+
+document.getElementById('mutebutton').onkeydown = function(e) {
+    if(e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.onclick(e);
     }
 };
 
@@ -1025,6 +1045,11 @@ const unlimitedRate = 1000000000;
 const simulcastRate = 100000;
 const hqAudioRate = 128000;
 
+// STEREO-DEBUG: ping on load so we can confirm fresh code is running.
+fetch('/stereo-debug', {method: 'POST', body: JSON.stringify({
+    where: 'load', ua: navigator.userAgent,
+})}).catch(() => {});
+
 /**
  * Decide whether we want to send simulcast.
  *
@@ -1274,6 +1299,8 @@ async function addLocalMedia(localId) {
             audio.noiseSuppression = false;
             audio.autoGainControl = false;
         }
+        if(settings.hqaudio)
+            audio.channelCount = 2;
     }
 
     let old = serverConnection.findByLocalId(localId);
@@ -1291,6 +1318,18 @@ async function addLocalMedia(localId) {
     } catch(e) {
         displayError(e);
         return;
+    }
+
+    {
+        let atrack = stream.getAudioTracks()[0];
+        if(atrack)
+            fetch('/stereo-debug', {method: 'POST', body: JSON.stringify({
+                where: 'capture',
+                ua: navigator.userAgent,
+                hqaudio: settings.hqaudio,
+                channelCount: atrack.getSettings().channelCount,
+                label: atrack.label,
+            })}).catch(() => {});
     }
 
     setMediaChoices(true);

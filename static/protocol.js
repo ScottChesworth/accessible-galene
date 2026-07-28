@@ -921,7 +921,7 @@ ServerConnection.prototype.gotOffer = async function(id, label, source, username
     try {
         await c.pc.setRemoteDescription({
             type: 'offer',
-            sdp: sdp,
+            sdp: setStereo(sdp),
         });
 
         await c.flushRemoteIceCandidates();
@@ -929,7 +929,10 @@ ServerConnection.prototype.gotOffer = async function(id, label, source, username
         let answer = await c.pc.createAnswer();
         if(!answer)
             throw new Error("Didn't create answer");
-        await c.pc.setLocalDescription(answer);
+        await c.pc.setLocalDescription({
+            type: 'answer',
+            sdp: setStereo(answer.sdp),
+        });
         this.send({
             type: 'answer',
             id: id,
@@ -966,7 +969,7 @@ ServerConnection.prototype.gotAnswer = async function(id, sdp) {
     try {
         await c.pc.setRemoteDescription({
             type: 'answer',
-            sdp: sdp,
+            sdp: setStereo(sdp),
         });
     } catch(e) {
         try {
@@ -1397,6 +1400,40 @@ Stream.prototype.flushRemoteIceCandidates = async function () {
  * @function
  * @param {boolean} [restartIce] - Whether to restart ICE.
  */
+/**
+ * setStereo edits an SDP to enable stereo Opus.  Chrome encodes and
+ * decodes Opus in mono unless "stereo=1" and "sprop-stereo=1" are
+ * present in the fmtp line; Firefox does the right thing on its own.
+ *
+ * @param {string} sdp
+ * @returns {string}
+ */
+function setStereo(sdp) {
+    let lines = sdp.split('\r\n');
+    let pts = [];
+    for(let l of lines) {
+        let m = l.match(/^a=rtpmap:(\d+) opus\/48000/i);
+        if(m)
+            pts.push(m[1]);
+    }
+    for(let i = 0; i < lines.length; i++) {
+        let m = lines[i].match(/^a=fmtp:(\d+) (.*)$/);
+        if(!m || pts.indexOf(m[1]) < 0)
+            continue;
+        let params = m[2];
+        if(!/(^|;)\s*stereo=/.test(params))
+            params += ';stereo=1';
+        if(!/(^|;)\s*sprop-stereo=/.test(params))
+            params += ';sprop-stereo=1';
+        lines[i] = `a=fmtp:${m[1]} ${params}`;
+    }
+    fetch('/stereo-debug', {method: 'POST', body: JSON.stringify({
+        where: 'sdp', ua: navigator.userAgent, pts: pts,
+        fmtp: lines.filter(l => /^a=fmtp:/.test(l)),
+    })}).catch(() => {});
+    return lines.join('\r\n');
+}
+
 Stream.prototype.negotiate = async function (restartIce) {
     let c = this;
     if(!c.up)
@@ -1409,7 +1446,10 @@ Stream.prototype.negotiate = async function (restartIce) {
     let offer = await c.pc.createOffer(options);
     if(!offer)
         throw(new Error("Didn't create offer"));
-    await c.pc.setLocalDescription(offer);
+    await c.pc.setLocalDescription({
+        type: 'offer',
+        sdp: setStereo(offer.sdp),
+    });
 
     c.sc.send({
         type: 'offer',

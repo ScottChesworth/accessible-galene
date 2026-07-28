@@ -511,6 +511,8 @@ function setButtonsVisibility() {
 
     setVisibility('mutebutton', !connected || canPresent);
 
+    setVisibility('raisehandbutton', connected);
+
     // allow multiple shared documents
     setVisibility('sharebutton', canShare);
 
@@ -622,6 +624,26 @@ document.getElementById('mutebutton').onkeydown = function(e) {
         e.preventDefault();
         this.onclick(e);
     }
+};
+
+/**
+ * @param {boolean} raised
+ */
+function setRaiseHandButton(raised) {
+    let button = document.getElementById('raisehandbutton');
+    if(button)
+        button.setAttribute('aria-pressed', raised ? 'true' : 'false');
+}
+
+getButtonElement('raisehandbutton').onclick = function(e) {
+    e.preventDefault();
+    let newRaised = this.getAttribute('aria-pressed') !== 'true';
+    serverConnection.userAction(
+        'setdata', serverConnection.id,
+        {'raisehand': newRaised ? true : null},
+    );
+    setRaiseHandButton(newRaised);
+    announcePolite(newRaised ? 'Hand raised' : 'Hand lowered');
 };
 
 document.getElementById('sharebutton').onclick = function(e) {
@@ -2261,7 +2283,9 @@ function setUserStatus(id, elt, userinfo, announce) {
         elt.classList.remove('user-status-camera');
     }
 
-    if(announce && raised && !wasRaised)
+    if(id === serverConnection.id)
+        setRaiseHandButton(raised);
+    else if(announce && raised && !wasRaised)
         announcePolite(`${name} raised their hand`);
 }
 

@@ -79,7 +79,12 @@ function getSettings() {
         console.warn("Couldn't retrieve settings:", e);
         settings = fallbackSettings;
     }
-    return settings || {};
+    if(!settings)
+        settings = {};
+    // Default to high-quality (stereo) audio unless explicitly turned off.
+    if(settings.hqaudio === undefined)
+        settings.hqaudio = true;
+    return settings;
 }
 
 /**

@@ -1,6 +1,8 @@
 *~
 /galene
+/galene.exe
 /galenectl/galenectl
+/galenectl.exe
 /data
 /groups/**/*.json
 /static/**/*.d.ts

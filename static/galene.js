@@ -2472,6 +2472,9 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
         (document.getElementById('input'));
     input.placeholder = 'Type /help for help';
     setTimeout(() => {input.placeholder = '';}, 8000);
+    // Move focus into the meeting on join so screen-reader users land on
+    // a useful control rather than the now-hidden login form.
+    input.focus();
 
     if(status.locked)
         displayWarning('This group is locked');
@@ -4051,6 +4054,31 @@ document.getElementById('show-chat').onclick = function(e) {
     setVisibility('show-chat', false);
     resizePeers();
 };
+
+/**
+ * Make a click-only div behave as an accessible button: focusable,
+ * labelled, and activatable with Enter or Space.
+ * @param {string} id
+ * @param {string} label
+ */
+function makeAccessibleButton(id, label) {
+    let el = document.getElementById(id);
+    if(!el)
+        return;
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('aria-label', label);
+    el.addEventListener('keydown', function(e) {
+        if(e.key !== 'Enter' && e.key !== ' ')
+            return;
+        e.preventDefault();
+        el.click();
+    });
+}
+
+makeAccessibleButton('openside', 'More options');
+makeAccessibleButton('show-chat', 'Show chat');
+makeAccessibleButton('close-chat', 'Hide chat');
 
 async function serverConnect() {
     if(serverConnection && serverConnection.socket)

@@ -17,6 +17,7 @@
 
   <body>
     <div id="announcer" role="alert" aria-live="assertive" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></div>
+    <div id="live-polite" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></div>
     <div id="main" class="app">
       <div class="row full-height">
         <nav id="left-sidebar">
@@ -24,7 +25,7 @@
             <div class="galene-header">Galène</div>
           </div>
           <div class="header-sep"></div>
-          <div id="users"></div>
+          <div id="users" role="group" aria-label="Participants"></div>
         </nav>
         <div class="container">
           <header>
@@ -75,11 +76,11 @@
                   <div class="close-chat" id="close-chat"  title="Hide chat">
                     <span class="close-icon"></span>
                   </div>
-                  <div id="box"></div>
+                  <div id="box" role="log" aria-live="polite" aria-label="Chat messages"></div>
                   <div class="reply">
                     <form id="inputform">
-                      <textarea id="input" class="form-reply"></textarea>
-                      <input id="inputbutton" type="submit" value="&#10148;" class="btn btn-default"/>
+                      <textarea id="input" class="form-reply" aria-label="Type a message"></textarea>
+                      <input id="inputbutton" type="submit" value="&#10148;" aria-label="Send message" class="btn btn-default"/>
                     </form>
                   </div>
                 </div>

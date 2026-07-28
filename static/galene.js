@@ -2158,12 +2158,22 @@ function addUser(id, userinfo) {
     let user = document.createElement('div');
     user.id = 'user-' + id;
     user.classList.add("user-p");
+    user.setAttribute('role', 'button');
+    user.tabIndex = 0;
     setUserStatus(id, user, userinfo);
     user.addEventListener('click', function(e) {
         let elt = e.currentTarget;
         if(!elt || !(elt instanceof HTMLElement))
             throw new Error("Couldn't find user div");
         userMenu(elt);
+    });
+    user.addEventListener('keydown', function(e) {
+        if(e.key !== 'Enter' && e.key !== ' ')
+            return;
+        e.preventDefault();
+        let elt = e.currentTarget;
+        if(elt instanceof HTMLElement)
+            userMenu(elt);
     });
 
     let us = div.children;
@@ -2204,7 +2214,7 @@ function changeUser(id, userinfo) {
         console.warn('Unknown user ' + id);
         return;
     }
-    setUserStatus(id, elt, userinfo);
+    setUserStatus(id, elt, userinfo, true);
 }
 
 /**
@@ -2212,12 +2222,10 @@ function changeUser(id, userinfo) {
  * @param {HTMLElement} elt
  * @param {user} userinfo
  */
-function setUserStatus(id, elt, userinfo) {
-    elt.textContent = userinfo.username ? userinfo.username : '(anon)';
-    if(userinfo.data.raisehand)
-        elt.classList.add('user-status-raisehand');
-    else
-        elt.classList.remove('user-status-raisehand');
+function setUserStatus(id, elt, userinfo, announce) {
+    let name = userinfo.username ? userinfo.username : '(anon)';
+    let wasRaised = elt.classList.contains('user-status-raisehand');
+    let raised = !!userinfo.data.raisehand;
 
     let microphone=false, camera = false;
     for(let label in userinfo.streams) {
@@ -2228,6 +2236,20 @@ function setUserStatus(id, elt, userinfo) {
                 camera = true;
         }
     }
+
+    elt.textContent = name;
+    let status = [];
+    if(raised)
+        status.push('hand raised');
+    if(microphone)
+        status.push('microphone on');
+    elt.setAttribute('aria-label',
+                     status.length ? `${name}, ${status.join(', ')}` : name);
+
+    if(raised)
+        elt.classList.add('user-status-raisehand');
+    else
+        elt.classList.remove('user-status-raisehand');
     if(camera) {
         elt.classList.remove('user-status-microphone');
         elt.classList.add('user-status-camera');
@@ -2238,6 +2260,9 @@ function setUserStatus(id, elt, userinfo) {
         elt.classList.remove('user-status-microphone');
         elt.classList.remove('user-status-camera');
     }
+
+    if(announce && raised && !wasRaised)
+        announcePolite(`${name} raised their hand`);
 }
 
 /**
@@ -3856,6 +3881,19 @@ document.getElementById('resizer').addEventListener('mousedown', chatResizer, fa
  * @param {unknown} message
  * @param {string} [level]
  */
+/**
+ * Announce a non-urgent message to screen readers via a polite live region.
+ * @param {string} message
+ */
+function announcePolite(message) {
+    let el = document.getElementById('live-polite');
+    if(!el)
+        return;
+    el.textContent = '';
+    // Re-set after a tick so repeated identical messages re-announce.
+    setTimeout(() => { el.textContent = message; }, 50);
+}
+
 function displayError(message, level) {
     if(message instanceof Error)
         message = message.message;

@@ -79,7 +79,12 @@ function getSettings() {
         console.warn("Couldn't retrieve settings:", e);
         settings = fallbackSettings;
     }
-    return settings || {};
+    if(!settings)
+        settings = {};
+    // Default to muted until the user explicitly unmutes.
+    if(settings.localMute === undefined)
+        settings.localMute = true;
+    return settings;
 }
 
 /**

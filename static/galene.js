@@ -3875,6 +3875,13 @@ function displayError(message, level) {
         break;
     }
 
+    let announcer = document.getElementById('announcer');
+    if(announcer) {
+        announcer.textContent = '';
+        // Re-set after a tick so repeated identical messages re-announce.
+        setTimeout(() => { announcer.textContent = message; }, 50);
+    }
+
     /** @ts-ignore */
     Toastify({
         text: message,

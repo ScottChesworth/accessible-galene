@@ -2495,6 +2495,21 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
         if(probingState === 'probing' && error === 'need-username') {
             probingState = 'need-username';
             setVisibility('passwordform', false);
+        } else if(message === 'not authorised' &&
+                  !getVisibility('passwordform')) {
+            // The name is registered to an operator, so a password is
+            // required.  Reveal the password field and let them try
+            // again, rather than showing a bare error to an ordinary
+            // attendee who happened to pick a reserved name.
+            setVisibility('passwordform', true);
+            displayMessage(
+                'That name belongs to an operator. Enter the password, then press Connect.'
+            );
+            // Defer the focus: this handler is about to close the socket
+            // and churn the DOM (setButtonsVisibility, async gotClose),
+            // and focus() on a just-revealed field won't stick in the
+            // middle of that.  Land it once the dust settles.
+            setTimeout(() => getInputElement('password').focus(), 0);
         } else {
             token = null;
             displayError('The server said: ' + message);
@@ -4118,13 +4133,6 @@ document.getElementById('loginform').onsubmit = async function(e) {
 
     // Connect to the server, gotConnected will join.
     serverConnect();
-};
-
-document.getElementById('oplogin').onclick = function(e) {
-    e.preventDefault();
-    setVisibility('passwordform', true);
-    setVisibility('oplogin', false);
-    getInputElement('password').focus();
 };
 
 document.getElementById('disconnectbutton').onclick = function(e) {

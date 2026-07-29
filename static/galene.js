@@ -675,7 +675,7 @@ document.getElementById('mutebutton').onclick = function(e) {
     setLocalMute(localMute, true);
     playEarcon(localMute ? 'muted' : 'unmuted');
     if(!localMute && !findUpMedia('camera'))
-        announcePolite('Microphone unmuted, but not started yet; use Enable to start it');
+        announcePolite('Microphone unmuted, but not started yet. Press the Enable button to start it; your browser will ask for permission.');
     else
         announcePolite(localMute ? 'Microphone muted' : 'Microphone on');
 };
@@ -2601,7 +2601,7 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
             }
         } else {
             displayMessage(
-                "Press the Enable button and grant permission if you want to use your microphone."
+                "Press the Enable button to use your microphone; your browser will ask for permission."
             );
         }
     }

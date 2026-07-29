@@ -3608,22 +3608,6 @@ function findUserId(user) {
     return null;
 }
 
-commands.msg = {
-    parameters: 'user message',
-    description: 'send a private message',
-    f: (c, r) => {
-        let p = parseCommand(r);
-        if(!p[0])
-            throw new Error('/msg requires parameters');
-        let id = findUserId(p[0]);
-        if(!id)
-            throw new Error(`Unknown user ${p[0]}`);
-        serverConnection.chat('', id, p[1]);
-        addToChatbox(serverConnection.id, null, id, serverConnection.username,
-                     new Date(), false, false, '', p[1]);
-    }
-};
-
 /**
    @param {string} c
    @param {string} r

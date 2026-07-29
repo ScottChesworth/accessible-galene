@@ -1566,6 +1566,16 @@ func handleClientMessage(c *webClient, m clientMessage) error {
 			return c.error(group.UserError("join a group first"))
 		}
 
+		// Private messaging is disabled on this server.  A private chat
+		// is a "chat" addressed to a single peer (non-empty Dest); drop
+		// it regardless of what client sent it.  ("usermessage" keeps
+		// its Dest for file transfers and op actions, so leave it be.)
+		if m.Type == "chat" && m.Dest != "" {
+			return c.error(group.UserError(
+				"private messages are disabled",
+			))
+		}
+
 		required := "message"
 		if m.Type == "chat" && m.Kind == "caption" {
 			required = "caption"

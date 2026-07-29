@@ -1823,7 +1823,11 @@ function addCustomControls(media, container, c, toponly) {
 
         let volume = getVideoButton(controls, 'volume');
 
-        if(c.up && c.label === 'camera') {
+        // The volume slider sets playback level, so it only means anything
+        // on a stream you're listening to.  Your own outgoing stream is
+        // muted to yourself, so drop the (inert) slider from any up-stream
+        // tile, not just the camera.
+        if(c.up) {
             volume.remove();
         } else {
             setVolumeButton(media.muted,

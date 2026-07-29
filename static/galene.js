@@ -2564,8 +2564,11 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
     input.placeholder = 'Type /help for help';
     setTimeout(() => {input.placeholder = '';}, 8000);
     // Move focus into the meeting on join so screen-reader users land on
-    // a useful control rather than the now-hidden login form.
-    input.focus();
+    // a useful control rather than the now-hidden login form.  But if we
+    // are about to auto-request the microphone, don't grab focus: let the
+    // browser's permission prompt take it instead.
+    if(!present)
+        input.focus();
 
     // Suppress join/leave reports until the initial user list settles.
     usersReady = false;

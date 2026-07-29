@@ -121,17 +121,17 @@
                       <input id="password" type="password" name="password"
                              autocomplete="current-password" class="form-control"/>
                     </div>
-                    <label>Enable at start:</label>
-                    <div class="present-switch">
+                    <fieldset class="present-switch">
+                      <legend>Microphone at start:</legend>
                       <p class="switch-radio">
                         <input id="presentoff" type="radio" name="presentradio" value="" checked/>
-                        <label for="presentoff">Nothing</label>
+                        <label for="presentoff">Off for now &mdash; turn it on when you're ready</label>
                       </p>
                       <p class="switch-radio">
                         <input id="presentmike" type="radio" name="presentradio" value="mike"/>
-                        <label for="presentmike">Microphone</label>
+                        <label for="presentmike">Turn it on now (your browser will ask for permission)</label>
                       </p>
-                    </div>
+                    </fieldset>
                     <div class="clear"></div>
                     <div class="connect">
                       <input id="connectbutton" type="submit" class="btn btn-blue" value="Connect"/>

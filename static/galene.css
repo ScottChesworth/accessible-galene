@@ -729,6 +729,12 @@ h1 {
     width: 100%;
 }
 
+.present-switch {
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
 .switch-radio {
     margin: 0;
 }

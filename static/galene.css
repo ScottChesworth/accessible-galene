@@ -735,6 +735,44 @@ h1 {
     padding: 0;
 }
 
+/* Active item in a native-mode listbox (participants / chat). */
+[role="option"].option-active {
+    outline: 2px solid #8a7cff;
+    outline-offset: -2px;
+}
+
+/* Accessible popup menu (native mode). */
+.a11y-menu {
+    background: #2a2140;
+    border: 1px solid #8a7cff;
+    border-radius: 4px;
+    padding: 4px 0;
+    min-width: 12em;
+    z-index: 3999;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+}
+.a11y-menu [role="menuitem"] {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: #fff;
+    padding: 6px 14px;
+    font: inherit;
+    cursor: pointer;
+}
+.a11y-menu [role="menuitem"]:hover,
+.a11y-menu [role="menuitem"]:focus {
+    background: #8a7cff;
+    color: #1e1e28;
+    outline: none;
+}
+.a11y-menu [role="separator"] {
+    border-top: 1px solid rgba(255, 255, 255, .2);
+    margin: 4px 0;
+}
+
 .switch-radio {
     margin: 0;
 }

@@ -846,6 +846,331 @@ document.addEventListener('keydown', function(e) {
     announcePolite(`${v}% microphone level`);
 });
 
+/**
+ * Whether the native/app-style GUI is active (set by ui-mode.js from the
+ * ?ui= switch, a remembered choice, or standalone launch).
+ * @returns {boolean}
+ */
+function uiIsNative() {
+    return document.documentElement.getAttribute('data-ui') === 'native';
+}
+
+/**
+ * The first visible control in the toolbar, or null.
+ * @returns {HTMLElement}
+ */
+function firstVisibleToolbarControl() {
+    let menu = document.querySelector('.nav-menu');
+    if(!menu)
+        return null;
+    let items = menu.querySelectorAll(
+        'button, input, [role="button"], .nav-button',
+    );
+    for(let it of items) {
+        if(it instanceof HTMLElement && it.offsetParent !== null)
+            return it;
+    }
+    return null;
+}
+
+/**
+ * The main panes, in cycle order, that currently exist and are visible.
+ * @returns {{name: string, el: HTMLElement}[]}
+ */
+function uiPanes() {
+    let panes = [
+        {name: 'Toolbar', el: firstVisibleToolbarControl()},
+        {name: 'Participants', el: document.getElementById('users')},
+        {name: 'Chat', el: document.getElementById('box')},
+        {name: 'Message', el: document.getElementById('input')},
+    ];
+    return panes.filter(p => p.el instanceof HTMLElement &&
+                        p.el.offsetParent !== null);
+}
+
+/**
+ * @param {{name: string, el: HTMLElement}} pane
+ */
+function focusPane(pane) {
+    let el = pane.el;
+    let nativelyFocusable =
+        /^(BUTTON|INPUT|A|SELECT|TEXTAREA)$/.test(el.tagName);
+    if(!nativelyFocusable && el.tabIndex < 0)
+        el.tabIndex = -1;
+    el.focus();
+    announcePolite(pane.name);
+}
+
+/**
+ * Native-app-style pane cycling: F6 and Shift+F6 move focus between the
+ * main regions (toolbar, participants, chat, message box) and announce
+ * where you land, the way a desktop app cycles panes.  Only active in the
+ * native UI mode; in a plain browser tab F6 may be claimed by the browser
+ * (address bar), but it is free in the installed standalone window.
+ */
+document.addEventListener('keydown', function(e) {
+    if(!uiIsNative())
+        return;
+    if(e.key !== 'F6' || e.ctrlKey || e.altKey || e.metaKey)
+        return;
+    let panes = uiPanes();
+    if(panes.length === 0)
+        return;
+    e.preventDefault();
+    let active = document.activeElement;
+    let idx = panes.findIndex(
+        p => p.el === active || p.el.contains(active),
+    );
+    let dir = e.shiftKey ? -1 : 1;
+    let next;
+    if(idx === -1)
+        next = dir === 1 ? panes[0] : panes[panes.length - 1];
+    else
+        next = panes[(idx + dir + panes.length) % panes.length];
+    focusPane(next);
+});
+
+// When the mode was set explicitly via ?ui=, confirm it out loud so the
+// current interface is unambiguous while comparing across devices.
+if(window.uiModeExplicit)
+    setTimeout(() => announcePolite(
+        uiIsNative() ? 'Native interface' : 'Web interface'), 600);
+
+// Running counter for chat-message option ids (needed for the listbox's
+// aria-activedescendant in native mode).
+let chatMsgSeq = 0;
+
+/**
+ * Turn a container into a native-style listbox with arrow-key navigation
+ * (native mode).  Its option children (role="option") are navigated with
+ * Up/Down/Home/End; the container itself is the single tab stop and tracks
+ * the current item with aria-activedescendant, so a screen reader enters
+ * focus mode and announces each item as you arrow.  Enter/Space/Menu runs
+ * activate() on the current option.
+ *
+ * @param {HTMLElement} box
+ * @param {(opt: HTMLElement) => void} activate
+ */
+function setupListbox(box, activate) {
+    box.setAttribute('role', 'listbox');
+    box.tabIndex = 0;
+
+    function options() {
+        return Array.prototype.filter.call(box.children,
+            c => c instanceof HTMLElement &&
+                 c.getAttribute('role') === 'option' &&
+                 c.getClientRects().length > 0);
+    }
+    function current() {
+        let id = box.getAttribute('aria-activedescendant');
+        return id ? document.getElementById(id) : null;
+    }
+    function setCurrent(opt) {
+        for(let o of options())
+            o.classList.toggle('option-active', o === opt);
+        if(opt && opt.id) {
+            box.setAttribute('aria-activedescendant', opt.id);
+            opt.scrollIntoView({block: 'nearest'});
+        } else {
+            box.removeAttribute('aria-activedescendant');
+        }
+    }
+
+    box.addEventListener('focus', function() {
+        if(!uiIsNative() || current())
+            return;
+        let opts = options();
+        if(opts.length)
+            setCurrent(opts[0]);
+    });
+
+    box.addEventListener('keydown', function(e) {
+        if(!uiIsNative())
+            return;
+        let opts = options();
+        if(opts.length === 0)
+            return;
+        let cur = current();
+        let idx = cur ? opts.indexOf(cur) : -1;
+        let next = idx;
+        switch(e.key) {
+        case 'ArrowDown': next = Math.min(opts.length - 1, idx + 1); break;
+        case 'ArrowUp': next = idx < 0 ? 0 : Math.max(0, idx - 1); break;
+        case 'Home': next = 0; break;
+        case 'End': next = opts.length - 1; break;
+        case 'Enter':
+        case ' ':
+        case 'ContextMenu': {
+            e.preventDefault();
+            let target = cur || opts[0];
+            if(target && activate)
+                activate(target);
+            return;
+        }
+        default:
+            return;
+        }
+        e.preventDefault();
+        setCurrent(opts[next]);
+    });
+}
+
+/**
+ * Accessible popup menu: a real role="menu" with keyboard support (arrows,
+ * Home/End, Enter via the button, Escape/Tab to close) and focus restored
+ * to whatever was focused when it opened.  Replaces the mouse-only
+ * Contextual popup for the participant and chat menus.  Consumes the same
+ * items: {label, onClick} or {type:'seperator'}.  If opened by a mouse
+ * event (ev), it appears at the pointer; otherwise near the focused anchor.
+ *
+ * @param {Array<{label?: string, onClick?: () => void, type?: string}>} items
+ * @param {MouseEvent} [ev]
+ */
+function accessibleMenu(items, ev) {
+    let returnFocus = /** @type{HTMLElement} */(document.activeElement);
+    let menu = document.createElement('div');
+    menu.className = 'a11y-menu';
+    menu.setAttribute('role', 'menu');
+
+    let entries = [];
+    for(let it of items) {
+        if(!it || it.type === 'seperator') {
+            let sep = document.createElement('div');
+            sep.setAttribute('role', 'separator');
+            menu.appendChild(sep);
+            continue;
+        }
+        let mi = document.createElement('button');
+        mi.type = 'button';
+        mi.setAttribute('role', 'menuitem');
+        mi.tabIndex = -1;
+        mi.textContent = it.label;
+        mi.addEventListener('click', function() {
+            close();
+            if(it.onClick)
+                it.onClick();
+        });
+        menu.appendChild(mi);
+        entries.push(mi);
+    }
+    if(entries.length === 0)
+        return;
+
+    function close() {
+        document.removeEventListener('keydown', onKey, true);
+        document.removeEventListener('pointerdown', onOutside, true);
+        menu.remove();
+        if(returnFocus && returnFocus.focus)
+            returnFocus.focus();
+    }
+    function focusAt(i) {
+        entries[(i + entries.length) % entries.length].focus();
+    }
+    function onKey(e) {
+        let i = entries.indexOf(/** @type{HTMLElement} */(document.activeElement));
+        switch(e.key) {
+        case 'ArrowDown': e.preventDefault(); focusAt(i + 1); break;
+        case 'ArrowUp': e.preventDefault(); focusAt(i - 1); break;
+        case 'Home': e.preventDefault(); focusAt(0); break;
+        case 'End': e.preventDefault(); focusAt(entries.length - 1); break;
+        case 'Escape':
+        case 'Tab': e.preventDefault(); close(); break;
+        }
+    }
+    function onOutside(e) {
+        if(!menu.contains(e.target))
+            close();
+    }
+
+    let x, y;
+    if(ev && ev.detail > 0 && typeof ev.clientX === 'number') {
+        x = ev.clientX;
+        y = ev.clientY;
+    } else {
+        let r = returnFocus && returnFocus.getBoundingClientRect ?
+            returnFocus.getBoundingClientRect() : {left: 20, bottom: 20};
+        x = r.left;
+        y = r.bottom;
+    }
+    menu.style.position = 'fixed';
+    menu.style.left = Math.round(x) + 'px';
+    menu.style.top = Math.round(y) + 'px';
+    document.body.appendChild(menu);
+    // Keep it on-screen.
+    let mr = menu.getBoundingClientRect();
+    if(mr.right > window.innerWidth)
+        menu.style.left = Math.max(0, window.innerWidth - mr.width) + 'px';
+    if(mr.bottom > window.innerHeight)
+        menu.style.top = Math.max(0, window.innerHeight - mr.height) + 'px';
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onOutside, true);
+    focusAt(0);
+}
+
+// In native mode, present the chat and participants as listboxes so they
+// can be arrowed through like a desktop messages list and members list.
+// Web mode keeps role="log" / role="group".
+if(uiIsNative()) {
+    let users = document.getElementById('users');
+    if(users)
+        setupListbox(users, opt => userMenu(opt));
+    let box = document.getElementById('box');
+    if(box)
+        setupListbox(box, opt => {
+            let m = opt.querySelector('.message');
+            if(m instanceof HTMLElement)
+                chatMessageMenu(m);
+        });
+}
+
+/**
+ * Visible, keyboard-focusable elements within the app, in document order.
+ * The collapsed settings sidebar is excluded.
+ * @returns {HTMLElement[]}
+ */
+function appFocusables() {
+    let sidebar = document.getElementById('sidebarnav');
+    let sidebarOpen = !!sidebar && sidebar.offsetWidth > 10;
+    let out = [];
+    let sel = 'a[href], button, input, select, textarea, [tabindex]';
+    for(let el of document.querySelectorAll(sel)) {
+        if(!(el instanceof HTMLElement))
+            continue;
+        if(el.tabIndex < 0 || el.matches('[disabled]'))
+            continue;
+        if(el.getClientRects().length === 0)   // display:none, etc.
+            continue;
+        if(!sidebarOpen && sidebar && sidebar.contains(el))
+            continue;
+        out.push(el);
+    }
+    return out;
+}
+
+/**
+ * Native-app-style focus containment: in native mode, Tab and Shift+Tab
+ * wrap around within the app rather than escaping into the browser, so the
+ * control cycle feels bounded like a desktop window.  Only the wrap points
+ * are intercepted; ordinary Tab moves and browse-mode arrows are untouched.
+ */
+document.addEventListener('keydown', function(e) {
+    if(!uiIsNative() || e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey)
+        return;
+    let f = appFocusables();
+    if(f.length < 2)
+        return;
+    let first = f[0];
+    let last = f[f.length - 1];
+    let active = document.activeElement;
+    if(!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+    } else if(e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+    }
+});
+
 document.getElementById('sharebutton').onclick = function(e) {
     e.preventDefault();
     addShareMedia();
@@ -2407,7 +2732,7 @@ document.getElementById('invite-dialog').onclose = function(e) {
 /**
  * @param {HTMLElement} elt
  */
-function userMenu(elt) {
+function userMenu(elt, ev) {
     if(!elt.id.startsWith('user-'))
         throw new Error('Unexpected id for user menu');
     let id = elt.id.slice('user-'.length);
@@ -2463,10 +2788,7 @@ function userMenu(elt) {
             }});
         }
     }
-    /** @ts-ignore */
-    new Contextual({
-        items: items,
-    });
+    accessibleMenu(items, ev);
 }
 
 /**
@@ -2478,14 +2800,23 @@ function addUser(id, userinfo) {
     let user = document.createElement('div');
     user.id = 'user-' + id;
     user.classList.add("user-p");
-    user.setAttribute('role', 'button');
-    user.tabIndex = 0;
+    if(uiIsNative()) {
+        // An option in the participants listbox (see setupListbox): the
+        // listbox container is the tab stop and moves an active-descendant,
+        // so the option itself is not separately in the tab order.
+        user.setAttribute('role', 'option');
+        user.setAttribute('aria-haspopup', 'menu');
+        user.tabIndex = -1;
+    } else {
+        user.setAttribute('role', 'button');
+        user.tabIndex = 0;
+    }
     setUserStatus(id, user, userinfo);
     user.addEventListener('click', function(e) {
         let elt = e.currentTarget;
         if(!elt || !(elt instanceof HTMLElement))
             throw new Error("Couldn't find user div");
-        userMenu(elt);
+        userMenu(elt, e);
     });
     user.addEventListener('keydown', function(e) {
         if(e.key !== 'Enter' && e.key !== ' ')
@@ -2807,6 +3138,13 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
     // browser's permission prompt take it instead.
     if(!present)
         input.focus();
+
+    // When comparing GUI modes, re-confirm which interface we're in once
+    // we reach the room, since the load-time confirmation happened back on
+    // the join screen and the fresh room has little to navigate yet.
+    if(window.uiModeExplicit)
+        setTimeout(() => announcePolite(
+            uiIsNative() ? 'Native interface' : 'Web interface'), 800);
 
     // Suppress join/leave reports until the initial user list settles.
     usersReady = false;
@@ -3250,6 +3588,10 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
 
     let row = document.createElement('div');
     row.classList.add('message-row');
+    if(uiIsNative()) {
+        row.setAttribute('role', 'option');
+        row.id = 'msg-' + (++chatMsgSeq);
+    }
     let container = document.createElement('div');
     container.classList.add('message');
     row.appendChild(container);
@@ -3273,7 +3615,7 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
             let elt = e.currentTarget;
             if(!elt || !(elt instanceof HTMLElement))
                 throw new Error("Couldn't find chat message div");
-            chatMessageMenu(elt);
+            chatMessageMenu(elt, e);
         });
     }
 
@@ -3354,8 +3696,9 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
 
 /**
  * @param {HTMLElement} elt
+ * @param {MouseEvent} [ev]
  */
-function chatMessageMenu(elt) {
+function chatMessageMenu(elt, ev) {
     if(!(serverConnection && serverConnection.permissions &&
          serverConnection.permissions.indexOf('op') >= 0))
         return;
@@ -3388,10 +3731,7 @@ function chatMessageMenu(elt) {
         serverConnection.userAction('kick', peerId);
     }});
 
-    /** @ts-ignore */
-    new Contextual({
-        items: items,
-    });
+    accessibleMenu(items, ev);
 }
 
 /**

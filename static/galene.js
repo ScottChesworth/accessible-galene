@@ -582,23 +582,15 @@ function setLocalMute(mute, reflect) {
     muteLocalTracks(mute);
     let button = document.getElementById('mutebutton');
     let icon = button.querySelector('.fas');
-    let text = button.querySelector('.nav-text');
-    // Pressed = microphone on; not pressed = muted.
+    // Pressed = microphone on; not pressed = muted.  Keep the label
+    // fixed ("Microphone"), exactly like the raise-hand button: changing
+    // the accessible name on toggle made screen readers re-announce the
+    // button on top of the polite status message (doubled speech).  The
+    // icon is aria-hidden, so swapping it is silent.
     button.setAttribute('aria-pressed', mute ? 'false' : 'true');
-    if(mute){
-        if(icon) {
-            icon.classList.add('fa-microphone-slash');
-            icon.classList.remove('fa-microphone');
-        }
-        if(text)
-            text.textContent = ' Microphone muted';
-    } else {
-        if(icon) {
-            icon.classList.remove('fa-microphone-slash');
-            icon.classList.add('fa-microphone');
-        }
-        if(text)
-            text.textContent = ' Microphone on';
+    if(icon) {
+        icon.classList.toggle('fa-microphone-slash', mute);
+        icon.classList.toggle('fa-microphone', !mute);
     }
     if(reflect)
         updateSettings({localMute: mute});

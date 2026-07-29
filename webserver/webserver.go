@@ -9,6 +9,7 @@ import (
 	"html"
 	"io"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -33,6 +34,15 @@ var StaticRoot string
 var staticRoot *os.Root
 
 var Insecure bool
+
+// Some extensions used by the PWA are not reliably registered by the OS
+// (notably on Windows), which would make http.ServeContent fall back to
+// content sniffing and mislabel them.  Register them explicitly.
+func init() {
+	mime.AddExtensionType(".webmanifest", "application/manifest+json")
+	mime.AddExtensionType(".svg", "image/svg+xml")
+	mime.AddExtensionType(".js", "text/javascript")
+}
 
 func Serve(address string, dataDir string) error {
 	var err error

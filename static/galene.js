@@ -4110,8 +4110,6 @@ document.getElementById('loginform').onsubmit = async function(e) {
     if(!(form instanceof HTMLFormElement))
         throw new Error('Bad type for loginform');
 
-    setVisibility('passwordform', true);
-
     if(getInputElement('presentmike').checked)
         presentRequested = 'mike';
     else
@@ -4120,6 +4118,13 @@ document.getElementById('loginform').onsubmit = async function(e) {
 
     // Connect to the server, gotConnected will join.
     serverConnect();
+};
+
+document.getElementById('oplogin').onclick = function(e) {
+    e.preventDefault();
+    setVisibility('passwordform', true);
+    setVisibility('oplogin', false);
+    getInputElement('password').focus();
 };
 
 document.getElementById('disconnectbutton').onclick = function(e) {

@@ -557,6 +557,7 @@ function setButtonsVisibility() {
     setVisibility('unpresentbutton', local);
 
     setVisibility('mutebutton', !connected || canPresent);
+    setVisibility('micgain-item', !connected || canPresent);
 
     setVisibility('raisehandbutton', connected);
 
@@ -661,16 +662,96 @@ for(let t of earconTypes) {
         };
 }
 
-document.getElementById('mutebutton').onclick = function(e) {
-    e.preventDefault();
-    let localMute = !getSettings().localMute;
-    setLocalMute(localMute, true);
-    playEarcon(localMute ? 'muted' : 'unmuted');
-    if(!localMute && !findUpMedia('camera'))
+/**
+ * Apply a mute state with the usual feedback (earcon + polite
+ * announcement).  Shared by the button, the Ctrl+M shortcut and
+ * push-to-talk.
+ * @param {boolean} mute
+ */
+function setMicMuted(mute) {
+    setLocalMute(mute, true);
+    playEarcon(mute ? 'muted' : 'unmuted');
+    if(!mute && !findUpMedia('camera'))
         announcePolite('Microphone unmuted, but not started yet. Press the Enable button to start it; your browser will ask for permission.');
     else
-        announcePolite(localMute ? 'Microphone muted' : 'Microphone on');
+        announcePolite(mute ? 'Microphone muted' : 'Microphone on');
+}
+
+function toggleMic() {
+    setMicMuted(!getSettings().localMute);
+}
+
+// Push-to-talk hold state.  pttKeyHeld: Ctrl+M is being held; pttButtonHeld:
+// the mute button is being held with a pointer.
+let pttKeyHeld = false;
+let pttButtonHeld = false;
+
+document.getElementById('mutebutton').onclick = function(e) {
+    e.preventDefault();
+    if(getSettings().micMode === 'ptt') {
+        // Mouse/touch uses press-and-hold (pointer handlers below).  A
+        // keyboard activation (Enter/Space) reports detail 0 and can't
+        // "hold", so fall back to a plain toggle for keyboard users.
+        if(e.detail === 0)
+            toggleMic();
+        return;
+    }
+    toggleMic();
 };
+
+// Press-and-hold the mute button for push-to-talk (pointer only).
+document.getElementById('mutebutton').addEventListener('pointerdown', function(e) {
+    if(getSettings().micMode !== 'ptt')
+        return;
+    if(!pttButtonHeld && getSettings().localMute) {
+        pttButtonHeld = true;
+        setMicMuted(false);
+    }
+});
+window.addEventListener('pointerup', function(e) {
+    if(pttButtonHeld) {
+        pttButtonHeld = false;
+        setMicMuted(true);
+    }
+});
+
+// Microphone input level.  Reflects the stored setting and, while the
+// mic is live, adjusts the gain node in real time.  The slider stores
+// its value even before the mic starts, so it takes effect on the next
+// stream.
+{
+    let micgain = getInputElement('micgain');
+    if(micgain) {
+        let g = getSettings().micGain;
+        micgain.value = String(typeof g === 'number' ? g : 100);
+        micgain.oninput = function() {
+            // The native range control announces its own value to the
+            // screen reader, so no explicit announcement here.
+            setMicGain(parseFloat(this.value));
+        };
+    }
+}
+
+// Microphone mode: toggle (default) vs push-to-talk.
+{
+    let toggleRadio = getInputElement('micmode-toggle');
+    let pttRadio = getInputElement('micmode-ptt');
+    if(toggleRadio && pttRadio) {
+        let ptt = getSettings().micMode === 'ptt';
+        toggleRadio.checked = !ptt;
+        pttRadio.checked = ptt;
+        let onchange = function() {
+            let m = pttRadio.checked ? 'ptt' : 'toggle';
+            updateSettings({micMode: m});
+            // Push-to-talk rests muted: make sure the mic isn't left open
+            // when the mode is selected.
+            if(m === 'ptt' && !getSettings().localMute)
+                setMicMuted(true);
+        };
+        toggleRadio.onchange = onchange;
+        pttRadio.onchange = onchange;
+    }
+}
 
 /**
  * @param {boolean} raised
@@ -695,22 +776,74 @@ getButtonElement('raisehandbutton').onclick = function(e) {
 
 /**
  * Global keyboard shortcuts, active from anywhere in the window:
- * Ctrl+M toggles the microphone, Ctrl+H toggles the raised hand.  Each
- * is gated on its button being visible (i.e. the action applies).
+ * Ctrl+H toggles the raised hand; Ctrl+M controls the microphone.  In
+ * toggle mode Ctrl+M switches the mic on/off; in push-to-talk mode it
+ * unmutes while held (see the keyup handler for the release).  Each is
+ * gated on its button being visible (i.e. the action applies).
  */
 document.addEventListener('keydown', function(e) {
     if(e.repeat || !e.ctrlKey || e.altKey || e.metaKey || e.shiftKey)
         return;
-    let id;
-    switch(e.key.toLowerCase()) {
-    case 'm': id = 'mutebutton'; break;
-    case 'h': id = 'raisehandbutton'; break;
+    let key = e.key.toLowerCase();
+    if(key === 'h') {
+        if(!getVisibility('raisehandbutton'))
+            return;
+        e.preventDefault();
+        document.getElementById('raisehandbutton').click();
+    } else if(key === 'm') {
+        if(!getVisibility('mutebutton'))
+            return;
+        e.preventDefault();
+        if(getSettings().micMode === 'ptt') {
+            if(!pttKeyHeld && getSettings().localMute) {
+                pttKeyHeld = true;
+                setMicMuted(false);
+            }
+        } else {
+            toggleMic();
+        }
+    }
+});
+
+// Push-to-talk release: re-mute when Ctrl+M is let go.  We match on the
+// 'm' key alone, since Control may be released first.  A window blur is a
+// safety net so the mic can't stay open if focus is lost mid-hold.
+document.addEventListener('keyup', function(e) {
+    if(pttKeyHeld && e.key.toLowerCase() === 'm') {
+        pttKeyHeld = false;
+        setMicMuted(true);
+    }
+});
+window.addEventListener('blur', function() {
+    if(pttKeyHeld || pttButtonHeld) {
+        pttKeyHeld = false;
+        pttButtonHeld = false;
+        setMicMuted(true);
+    }
+});
+
+/**
+ * Global microphone-level shortcuts: Ctrl+Shift+Up and Ctrl+Shift+Down
+ * nudge the mic gain by 5% and announce the new value (value first, so
+ * the changing number is heard immediately on repeated presses).
+ */
+document.addEventListener('keydown', function(e) {
+    if(e.repeat || !e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey)
+        return;
+    let delta;
+    switch(e.key) {
+    case 'ArrowUp': delta = 5; break;
+    case 'ArrowDown': delta = -5; break;
     default: return;
     }
-    if(!getVisibility(id))
+    if(!getVisibility('micgain-item'))
         return;
     e.preventDefault();
-    document.getElementById(id).click();
+    let g = getSettings().micGain;
+    if(typeof g !== 'number')
+        g = 100;
+    let v = setMicGain(g + delta);
+    announcePolite(`${v}% microphone level`);
 });
 
 document.getElementById('sharebutton').onclick = function(e) {
@@ -1403,6 +1536,9 @@ async function addLocalMedia(localId) {
 
     setMediaChoices(true);
 
+    // Insert the mic-gain node so its level can be adjusted live.
+    stream = applyMicGain(stream);
+
     let c;
 
     try {
@@ -1414,6 +1550,9 @@ async function addLocalMedia(localId) {
     }
 
     c.label = 'camera';
+    // Tear the gain graph down when this stream really closes (setUpStream
+    // only calls this on a genuine close, not on renegotiation/replace).
+    c.userdata.onclose = teardownMicGain;
 
     if(settings.filter) {
         let filter = filters[settings.filter];
@@ -1565,6 +1704,94 @@ function findUpMedia(label) {
 /**
  * @param {boolean} mute
  */
+// Local microphone input gain.  WebRTC has no hardware-gain API, so we
+// route the captured mic through a Web Audio GainNode and send the
+// processed track.  Module-level singletons: there is only ever one
+// local microphone stream.
+let micAudioContext = null;
+let micGainNode = null;
+let micRawStream = null;
+
+/**
+ * The stored mic gain as a linear factor (1.0 == 100%).
+ * @returns {number}
+ */
+function micGainValue() {
+    let g = getSettings().micGain;
+    if(typeof g !== 'number' || !(g >= 0))
+        g = 100;
+    return g / 100;
+}
+
+/**
+ * Stop the raw capture and close the audio graph feeding the mic gain
+ * node.  Safe to call when nothing is set up.
+ */
+function teardownMicGain() {
+    if(micRawStream) {
+        micRawStream.getTracks().forEach(t => t.stop());
+        micRawStream = null;
+    }
+    if(micAudioContext) {
+        micAudioContext.close().catch(() => {});
+        micAudioContext = null;
+    }
+    micGainNode = null;
+}
+
+/**
+ * Route a captured microphone stream through a gain node so its level
+ * can be adjusted live.  Returns a stream carrying the processed audio;
+ * on any failure it returns the original stream unchanged.
+ *
+ * @param {MediaStream} stream
+ * @returns {MediaStream}
+ */
+function applyMicGain(stream) {
+    if(stream.getAudioTracks().length === 0)
+        return stream;
+    teardownMicGain();
+    try {
+        let Ctx = window.AudioContext || window.webkitAudioContext;
+        if(!Ctx)
+            return stream;
+        micAudioContext = new Ctx();
+        micAudioContext.resume().catch(() => {});
+        micRawStream = stream;
+        let source = micAudioContext.createMediaStreamSource(stream);
+        micGainNode = micAudioContext.createGain();
+        micGainNode.gain.value = micGainValue();
+        let dest = micAudioContext.createMediaStreamDestination();
+        source.connect(micGainNode);
+        micGainNode.connect(dest);
+        return dest.stream;
+    } catch(e) {
+        console.warn("Couldn't set up microphone gain:", e);
+        teardownMicGain();
+        return stream;
+    }
+}
+
+/**
+ * Set the microphone level (percent), clamped to 10-200 and snapped to
+ * 5% steps (10% is the floor since 0% would just duplicate mute).  Keeps
+ * the slider, the stored setting, and the live gain node in sync, and
+ * returns the value actually applied.
+ *
+ * @param {number} v
+ * @returns {number}
+ */
+function setMicGain(v) {
+    v = Math.max(10, Math.min(200, Math.round(v / 5) * 5));
+    let micgain = getInputElement('micgain');
+    if(micgain)
+        micgain.value = String(v);
+    updateSettings({micGain: v});
+    if(micGainNode)
+        micGainNode.gain.value = v / 100;
+    return v;
+}
+
 function muteLocalTracks(mute) {
     if(!serverConnection)
         return;

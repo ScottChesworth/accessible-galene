@@ -53,6 +53,11 @@
                     <i class="fas fa-microphone-slash" aria-hidden="true"></i><span class="nav-text"> Microphone</span>
                   </button>
                 </li>
+                <li id="micgain-item" class="invisible">
+                  <label for="micgain" class="nav-text">Mic level</label>
+                  <input id="micgain" type="range" min="10" max="200" value="100" step="5"
+                         aria-label="Microphone level"/>
+                </li>
                 <li>
                   <button id="raisehandbutton" class="invisible btn btn-default" aria-pressed="false" aria-keyshortcuts="Control+H">
                     <i class="fas fa-hand-paper" aria-hidden="true"></i><span class="nav-text"> Raise hand</span>
@@ -205,6 +210,20 @@
 
           </fieldset>
         </div>
+
+        <fieldset>
+          <legend>Microphone mode</legend>
+          <form id="micmodeform">
+            <p class="switch-radio">
+              <input id="micmode-toggle" type="radio" name="micmode" value="toggle" checked/>
+              <label for="micmode-toggle">Toggle: Control+M or the button switches the mic on and off</label>
+            </p>
+            <p class="switch-radio">
+              <input id="micmode-ptt" type="radio" name="micmode" value="ptt"/>
+              <label for="micmode-ptt">Push to talk: hold Control+M (or hold the button) to talk, release to mute</label>
+            </p>
+          </form>
+        </fieldset>
 
         <fieldset>
           <legend>Other Settings</legend>

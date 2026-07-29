@@ -36,6 +36,7 @@
  * @property {string} [filter]
  * @property {boolean} [preprocessing]
  * @property {boolean} [hqaudio]
+ * @property {number} [micGain]
  * @property {boolean} [forceRelay]
  */
 

@@ -101,6 +101,26 @@ function getButtonElement(id) {
 }
 
 /**
+ * Earcon types: internal name and human-readable label.
+ */
+const earconTypes = [
+    {name: 'muted', label: 'Mute'},
+    {name: 'unmuted', label: 'Microphone on'},
+    {name: 'raise', label: 'Raise hand'},
+    {name: 'lower', label: 'Lower hand'},
+    {name: 'notify', label: 'Another participant raises a hand'},
+];
+
+/**
+ * The settings key that enables a given earcon.
+ * @param {string} name
+ * @returns {string}
+ */
+function earconSettingKey(name) {
+    return 'earcon' + name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/**
  * Ensure that the UI reflects the stored settings.
  */
 function reflectSettings() {
@@ -193,6 +213,12 @@ function reflectSettings() {
 
     if(settings.hasOwnProperty('hqaudio'))
         getInputElement('hqaudiobox').checked = settings.hqaudio;
+
+    for(let t of earconTypes) {
+        let box = document.getElementById('earcon-' + t.name);
+        if(box)
+            box.checked = settings[earconSettingKey(t.name)] !== false;
+    }
 
     if(store)
         storeSettings(settings);
@@ -603,6 +629,14 @@ getInputElement('hqaudiobox').onchange = function(e) {
     updateSettings({hqaudio: this.checked});
     replaceCameraStream();
 };
+
+for(let t of earconTypes) {
+    let box = document.getElementById('earcon-' + t.name);
+    if(box)
+        box.onchange = function() {
+            updateSettings({[earconSettingKey(t.name)]: this.checked});
+        };
+}
 
 document.getElementById('mutebutton').onclick = function(e) {
     e.preventDefault();
@@ -3946,6 +3980,8 @@ let earcons = {};
  * @param {string} name
  */
 function playEarcon(name) {
+    if(getSettings()[earconSettingKey(name)] === false)
+        return;
     try {
         let a = earcons[name];
         if(!a) {

@@ -109,6 +109,8 @@ const earconTypes = [
     {name: 'raise', label: 'Raise hand'},
     {name: 'lower', label: 'Lower hand'},
     {name: 'notify', label: 'Another participant raises a hand'},
+    {name: 'joined', label: 'Participant joined'},
+    {name: 'left', label: 'Participant left'},
 ];
 
 /**
@@ -118,6 +120,21 @@ const earconTypes = [
  */
 function earconSettingKey(name) {
     return 'earcon' + name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/**
+ * Whether the initial user list has settled after joining, so that
+ * later joins and leaves can be reported without a flood on entry.
+ */
+let usersReady = false;
+let usersReadyTimer = null;
+
+/**
+ * @returns {boolean} whether the current user is an operator.
+ */
+function isOp() {
+    return !!(serverConnection && serverConnection.permissions &&
+              serverConnection.permissions.indexOf('op') >= 0);
 }
 
 /**
@@ -219,6 +236,10 @@ function reflectSettings() {
         if(box)
             box.checked = settings[earconSettingKey(t.name)] !== false;
     }
+
+    let ajl = document.getElementById('announce-joinleave');
+    if(ajl)
+        ajl.checked = settings.announceJoinLeave !== false;
 
     if(store)
         storeSettings(settings);
@@ -546,6 +567,8 @@ function setButtonsVisibility() {
     setVisibility('sendform', canPresent);
     setVisibility('simulcastform', canPresent);
 
+    setVisibility('op-cues', connected && isOp());
+
     setVisibility('collapse-video', mediacount && mobilelayout);
 }
 
@@ -635,6 +658,14 @@ for(let t of earconTypes) {
     if(box)
         box.onchange = function() {
             updateSettings({[earconSettingKey(t.name)]: this.checked});
+        };
+}
+
+{
+    let ajl = document.getElementById('announce-joinleave');
+    if(ajl)
+        ajl.onchange = function() {
+            updateSettings({announceJoinLeave: this.checked});
         };
 }
 
@@ -2352,10 +2383,24 @@ function gotUser(id, kind) {
     switch(kind) {
     case 'add':
         addUser(id, serverConnection.users[id]);
+        if(usersReady && isOp() && id !== serverConnection.id) {
+            let u = serverConnection.users[id];
+            let name = (u && u.username) || '(anon)';
+            if(getSettings().announceJoinLeave !== false)
+                announcePolite(`${name} joined`);
+            playEarcon('joined');
+        }
         if(Object.keys(serverConnection.users).length === 3)
             reconsiderSendParameters();
         break;
     case 'delete':
+        if(usersReady && isOp() && id !== serverConnection.id) {
+            let elt = document.getElementById('user-' + id);
+            let name = (elt && elt.textContent) || '(anon)';
+            if(getSettings().announceJoinLeave !== false)
+                announcePolite(`${name} left`);
+            playEarcon('left');
+        }
         delUser(id);
         if(Object.keys(serverConnection.users).length < 3)
             scheduleReconsiderParameters();
@@ -2521,6 +2566,12 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
     // Move focus into the meeting on join so screen-reader users land on
     // a useful control rather than the now-hidden login form.
     input.focus();
+
+    // Suppress join/leave reports until the initial user list settles.
+    usersReady = false;
+    if(usersReadyTimer)
+        clearTimeout(usersReadyTimer);
+    usersReadyTimer = setTimeout(() => { usersReady = true; }, 2000);
 
     if(status.locked)
         displayWarning('This group is locked');

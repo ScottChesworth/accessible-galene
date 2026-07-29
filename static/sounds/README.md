@@ -13,6 +13,8 @@ Expected filenames (served from `/sounds/<name>.wav`):
 | `raise.wav`   | you raise your hand                          |
 | `lower.wav`   | you lower your hand                          |
 | `notify.wav`  | another participant raises their hand        |
+| `joined.wav`  | a participant joins (operators only)         |
+| `left.wav`    | a participant leaves (operators only)        |
 
 Guidance:
 

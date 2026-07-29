@@ -2601,7 +2601,7 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
             }
         } else {
             displayMessage(
-                "Press Enable to enable your camera or microphone"
+                "Press the Enable button and grant permission if you want to use your microphone."
             );
         }
     }

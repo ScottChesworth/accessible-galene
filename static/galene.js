@@ -608,6 +608,7 @@ document.getElementById('mutebutton').onclick = function(e) {
     e.preventDefault();
     let localMute = !getSettings().localMute;
     setLocalMute(localMute, true);
+    playEarcon(localMute ? 'muted' : 'unmuted');
     if(!localMute && !findUpMedia('camera'))
         announcePolite('Microphone unmuted, but not started yet; use Enable to start it');
     else
@@ -631,6 +632,7 @@ getButtonElement('raisehandbutton').onclick = function(e) {
         {'raisehand': newRaised ? true : null},
     );
     setRaiseHandButton(newRaised);
+    playEarcon(newRaised ? 'raise' : 'lower');
     announcePolite(newRaised ? 'Hand raised' : 'Hand lowered');
 };
 
@@ -2291,10 +2293,12 @@ function setUserStatus(id, elt, userinfo, announce) {
         elt.classList.remove('user-status-camera');
     }
 
-    if(id === serverConnection.id)
+    if(id === serverConnection.id) {
         setRaiseHandButton(raised);
-    else if(announce && raised && !wasRaised)
+    } else if(announce && raised && !wasRaised) {
         announcePolite(`${name} raised their hand`);
+        playEarcon('notify');
+    }
 }
 
 /**
@@ -3927,6 +3931,34 @@ function announcePolite(message) {
     el.textContent = '';
     // Re-set after a tick so repeated identical messages re-announce.
     setTimeout(() => { el.textContent = message; }, 50);
+}
+
+/**
+ * Cache of preloaded earcon audio elements.
+ * @type {Object<string,HTMLAudioElement>}
+ */
+let earcons = {};
+
+/**
+ * Play a short UI sound as an audible complement to the screen-reader
+ * announcements.  Files live at /sounds/<name>.wav; a missing or
+ * unplayable file is silently ignored.
+ * @param {string} name
+ */
+function playEarcon(name) {
+    try {
+        let a = earcons[name];
+        if(!a) {
+            a = new Audio(`/sounds/${name}.wav`);
+            earcons[name] = a;
+        }
+        a.currentTime = 0;
+        let p = a.play();
+        if(p && typeof p.catch === 'function')
+            p.catch(() => {});
+    } catch(e) {
+        /* ignore: earcons are best-effort */
+    }
 }
 
 function displayError(message, level) {

@@ -3322,7 +3322,7 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
             }
         } else {
             displayMessage(
-                "Press the Enable button to use your microphone; your browser will ask for permission."
+                "Press the \"Get microphone permissions\" button; your browser will then ask to use your microphone."
             );
         }
     }

@@ -878,10 +878,13 @@ function firstVisibleToolbarControl() {
  * @returns {{name: string, el: HTMLElement}[]}
  */
 function uiPanes() {
+    let users = document.getElementById('users');
+    let box = document.getElementById('box');
     let panes = [
         {name: 'Toolbar', el: firstVisibleToolbarControl()},
-        {name: 'Participants', el: document.getElementById('users')},
-        {name: 'Chat', el: document.getElementById('box')},
+        // Land on the current (real-focus) item of each list.
+        {name: 'Participants', el: users && rovingTarget(users)},
+        {name: 'Chat', el: box && rovingTarget(box)},
         {name: 'Message', el: document.getElementById('input')},
     ];
     return panes.filter(p => p.el instanceof HTMLElement &&
@@ -936,73 +939,83 @@ if(window.uiModeExplicit)
     setTimeout(() => announcePolite(
         uiIsNative() ? 'Native interface' : 'Web interface'), 600);
 
-// Running counter for chat-message option ids (needed for the listbox's
-// aria-activedescendant in native mode).
+// Running counter for chat-message ids (aria-activedescendant).
 let chatMsgSeq = 0;
 
 /**
- * Turn a container into a native-style listbox with arrow-key navigation
- * (native mode).  Its option children (role="option") are navigated with
- * Up/Down/Home/End; the container itself is the single tab stop and tracks
- * the current item with aria-activedescendant, so a screen reader enters
- * focus mode and announces each item as you arrow.  Enter/Space/Menu runs
- * activate() on the current option.
+ * Turn a container into a keyboard-navigable widget with arrow-key
+ * navigation.  Its item children (matched by isItem) are navigated with
+ * Up/Down/Home/End; the container is the single tab stop and tracks the
+ * current item with aria-activedescendant, so a screen reader enters focus
+ * mode and announces each item as you arrow.  Enter/Space/Menu runs
+ * activate() on the current item.
+ *
+ * containerRole is "listbox" for a selectable list (participants) or
+ * "application" for the chat, where "listbox" would make the reader
+ * announce an unwanted "N of M" position for every message.
  *
  * @param {HTMLElement} box
- * @param {(opt: HTMLElement) => void} activate
+ * @param {(item: HTMLElement) => void} activate
+ * @param {string} containerRole
+ * @param {(el: HTMLElement) => boolean} isItem
  */
-function setupListbox(box, activate) {
-    box.setAttribute('role', 'listbox');
-    box.tabIndex = 0;
+function setupListbox(box, activate, containerRole, isItem) {
+    box.setAttribute('role', containerRole);
+    box.tabIndex = -1;
 
-    function options() {
+    // All item children (visible or not).
+    function items() {
         return Array.prototype.filter.call(box.children,
-            c => c instanceof HTMLElement &&
-                 c.getAttribute('role') === 'option' &&
-                 c.getClientRects().length > 0);
+            c => c instanceof HTMLElement && isItem(c));
     }
-    function current() {
-        let id = box.getAttribute('aria-activedescendant');
-        return id ? document.getElementById(id) : null;
+    function visible() {
+        return items().filter(c => c.getClientRects().length > 0);
     }
-    function setCurrent(opt) {
-        for(let o of options())
-            o.classList.toggle('option-active', o === opt);
-        if(opt && opt.id) {
-            box.setAttribute('aria-activedescendant', opt.id);
-            opt.scrollIntoView({block: 'nearest'});
-        } else {
-            box.removeAttribute('aria-activedescendant');
+    // Move real DOM focus (not just aria-activedescendant) to an item, so a
+    // screen reader's review cursor / navigator object follows it and its
+    // text can be reviewed word/character by word.  Roving tabindex keeps
+    // the list a single tab stop.
+    function focusItem(it) {
+        for(let o of items())
+            o.setAttribute('tabindex', o === it ? '0' : '-1');
+        if(it) {
+            it.focus();
+            it.scrollIntoView({block: 'nearest'});
         }
     }
-
-    box.addEventListener('focus', function() {
-        if(!uiIsNative() || current())
+    // Keep exactly one item as the roving tab stop (default to the last, the
+    // newest message) so Tab and F6 land in the list.  Runs as items are
+    // added, removed, or reordered.
+    function ensureTabStop() {
+        let all = items();
+        if(all.length === 0)
             return;
-        let opts = options();
-        if(opts.length)
-            setCurrent(opts[0]);
-    });
+        if(!all.some(o => o.getAttribute('tabindex') === '0'))
+            all[all.length - 1].setAttribute('tabindex', '0');
+        for(let o of all)
+            if(o.getAttribute('tabindex') !== '0')
+                o.setAttribute('tabindex', '-1');
+    }
+    new MutationObserver(ensureTabStop).observe(box, {childList: true});
+    ensureTabStop();
 
     box.addEventListener('keydown', function(e) {
-        if(!uiIsNative())
-            return;
-        let opts = options();
+        let opts = visible();
         if(opts.length === 0)
             return;
-        let cur = current();
-        let idx = cur ? opts.indexOf(cur) : -1;
+        let idx = opts.indexOf(
+            /** @type{HTMLElement} */(document.activeElement));
         let next = idx;
         switch(e.key) {
-        case 'ArrowDown': next = Math.min(opts.length - 1, idx + 1); break;
-        case 'ArrowUp': next = idx < 0 ? 0 : Math.max(0, idx - 1); break;
+        case 'ArrowDown': next = idx < 0 ? 0 : Math.min(opts.length - 1, idx + 1); break;
+        case 'ArrowUp': next = idx < 0 ? opts.length - 1 : Math.max(0, idx - 1); break;
         case 'Home': next = 0; break;
         case 'End': next = opts.length - 1; break;
         case 'Enter':
         case ' ':
         case 'ContextMenu': {
             e.preventDefault();
-            let target = cur || opts[0];
+            let target = idx >= 0 ? opts[idx] : opts[opts.length - 1];
             if(target && activate)
                 activate(target);
             return;
@@ -1011,8 +1024,21 @@ function setupListbox(box, activate) {
             return;
         }
         e.preventDefault();
-        setCurrent(opts[next]);
+        focusItem(opts[next]);
     });
+}
+
+/**
+ * The roving tab stop (real focus target) of a listbox/application set up by
+ * setupListbox, or the container itself if it has no items yet.
+ * @param {HTMLElement} box
+ * @returns {HTMLElement}
+ */
+function rovingTarget(box) {
+    if(!box)
+        return box;
+    let it = box.querySelector('[tabindex="0"]');
+    return (it instanceof HTMLElement) ? it : box;
 }
 
 /**
@@ -1107,20 +1133,43 @@ function accessibleMenu(items, ev) {
     focusAt(0);
 }
 
-// In native mode, present the chat and participants as listboxes so they
-// can be arrowed through like a desktop messages list and members list.
-// Web mode keeps role="log" / role="group".
-if(uiIsNative()) {
-    let users = document.getElementById('users');
-    if(users)
-        setupListbox(users, opt => userMenu(opt));
+// Chat is a browse-mode list (role="list" with role="listitem" messages),
+// not a focus-mode widget.  Browse mode keeps the screen reader's virtual
+// cursor available, so messages can be reviewed word/character by word and
+// jumped between with the reader's built-in list-item navigation.  The
+// container is a tab stop so it still has a landing spot; focusing a
+// (non-widget) list does not switch the reader out of browse mode.
+{
     let box = document.getElementById('box');
     if(box)
+        // A listbox navigated by moving real focus between message options
+        // (see setupListbox): a tab stop and arrow-navigable, and real focus
+        // lets the review cursor reach a message by object navigation.  A
+        // screen reader announces an "N of M" position per option; that is an
+        // accepted NVDA behaviour that can't be suppressed from markup (see
+        // nvaccess/nvda #9823).  The operator actions menu opens on Enter, so
+        // no click handler / "clickable" is added.
         setupListbox(box, opt => {
             let m = opt.querySelector('.message');
             if(m instanceof HTMLElement)
                 chatMessageMenu(m);
-        });
+        }, 'listbox', c => c.classList.contains('message-row'));
+}
+// The participants list is a listbox, only in native mode.
+if(uiIsNative()) {
+    let users = document.getElementById('users');
+    if(users)
+        setupListbox(users, opt => userMenu(opt),
+                     'listbox', c => c.getAttribute('role') === 'option');
+}
+
+// Keep the chat's live region announcing new messages but not the periodic
+// relative-time updates: "additions" covers node additions (new messages)
+// while ignoring in-place text changes (the time refresh).
+{
+    let box = document.getElementById('box');
+    if(box)
+        box.setAttribute('aria-relevant', 'additions');
 }
 
 /**
@@ -2801,9 +2850,9 @@ function addUser(id, userinfo) {
     user.id = 'user-' + id;
     user.classList.add("user-p");
     if(uiIsNative()) {
-        // An option in the participants listbox (see setupListbox): the
-        // listbox container is the tab stop and moves an active-descendant,
-        // so the option itself is not separately in the tab order.
+        // An option in the participants listbox (see setupListbox), which
+        // moves real focus between options with a roving tabindex and
+        // handles Enter/Space itself.
         user.setAttribute('role', 'option');
         user.setAttribute('aria-haspopup', 'menu');
         user.tabIndex = -1;
@@ -2818,14 +2867,17 @@ function addUser(id, userinfo) {
             throw new Error("Couldn't find user div");
         userMenu(elt, e);
     });
-    user.addEventListener('keydown', function(e) {
-        if(e.key !== 'Enter' && e.key !== ' ')
-            return;
-        e.preventDefault();
-        let elt = e.currentTarget;
-        if(elt instanceof HTMLElement)
-            userMenu(elt);
-    });
+    // Web mode's plain buttons need their own Enter/Space; in native the
+    // listbox handler covers it (avoid opening the menu twice).
+    if(!uiIsNative())
+        user.addEventListener('keydown', function(e) {
+            if(e.key !== 'Enter' && e.key !== ' ')
+                return;
+            e.preventDefault();
+            let elt = e.currentTarget;
+            if(elt instanceof HTMLElement)
+                userMenu(elt);
+        });
 
     let us = div.children;
 
@@ -3559,6 +3611,50 @@ function formatTime(time) {
 }
 
 /**
+ * A short relative time, e.g. "just now", "3 minutes ago".
+ * @param {Date} time
+ * @returns {string}
+ */
+function relativeTime(time) {
+    let s = Math.floor((Date.now() - time.getTime()) / 1000);
+    if(s < 60)
+        return 'just now';
+    let m = Math.floor(s / 60);
+    if(m < 60)
+        return `${m} minute${m === 1 ? '' : 's'} ago`;
+    let h = Math.floor(m / 60);
+    if(h < 24)
+        return `${h} hour${h === 1 ? '' : 's'} ago`;
+    let d = Math.floor(h / 24);
+    return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+
+// Keep relative times fresh: the visible header time and the screen-reader
+// -only time suffix on each message.
+function refreshChatTimes() {
+    let box = document.getElementById('box');
+    if(!box)
+        return;
+    // Update in place (characterData) so it doesn't count as a node addition
+    // the live region would announce.
+    function setText(el, s) {
+        if(el.firstChild && el.firstChild.nodeType === 3)
+            el.firstChild.nodeValue = s;
+        else
+            el.textContent = s;
+    }
+    for(let tm of box.querySelectorAll('.message-time[data-time]')) {
+        let t = /** @type{HTMLElement} */(tm);
+        setText(t, relativeTime(new Date(Number(t.dataset.time))));
+    }
+    for(let st of box.querySelectorAll('.sr-time[data-time]')) {
+        let e = /** @type{HTMLElement} */(st);
+        setText(e, ' ' + relativeTime(new Date(Number(e.dataset.time))));
+    }
+}
+setInterval(refreshChatTimes, 60000);
+
+/**
  * @typedef {Object} lastMessage
  * @property {string} [nick]
  * @property {string} [peerId]
@@ -3588,10 +3684,14 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
 
     let row = document.createElement('div');
     row.classList.add('message-row');
-    if(uiIsNative()) {
-        row.setAttribute('role', 'option');
-        row.id = 'msg-' + (++chatMsgSeq);
-    }
+    // Id lets the chat widget point aria-activedescendant at this message.
+    row.id = 'msg-' + (++chatMsgSeq);
+    // Web mode presents the chat as a listbox (options); native mode uses a
+    // An option in the chat listbox.  Real focus moves onto it (see
+    // setupListbox), so the reader's navigator object lands on the message
+    // and its text can be reviewed by object navigation.  Its name comes
+    // from its own content (no aria-label leaf).
+    row.setAttribute('role', 'option');
     let container = document.createElement('div');
     container.classList.add('message');
     row.appendChild(container);
@@ -3609,16 +3709,28 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
     if(peerId) {
         container.dataset.peerId = peerId;
         container.dataset.username = nick;
-        container.addEventListener('click', function(e) {
-            if(e.detail !== 2)
-                return;
-            let elt = e.currentTarget;
-            if(!elt || !(elt instanceof HTMLElement))
-                throw new Error("Couldn't find chat message div");
-            chatMessageMenu(elt, e);
-        });
+        // No per-message click handler: that makes a screen reader announce
+        // every message as "clickable" and treat it as one interactive
+        // object instead of browsable text.  The operator double-click menu
+        // is handled by a single delegated listener on the list (see the
+        // chat setup).
     }
 
+    // Screen-reader reading: the row's accessible name is built from real
+    // text — an sr-only "Name:" prefix, the visible message body, and an
+    // sr-only relative-time suffix — so it announces as one phrase yet the
+    // body (with any links) stays walkable by the review cursor.
+    let destName = dest && serverConnection.users[dest] &&
+        serverConnection.users[dest].username;
+    let sender;
+    if(!peerId)
+        sender = '';
+    else if(kind === 'me')
+        sender = nick || '(anon)';
+    else if(dest)
+        sender = `${nick || '(anon)'} to ${destName || '(anon)'}`;
+    else
+        sender = nick || '(anon)';
     /** @type{HTMLElement} */
     let body;
     if(message instanceof HTMLElement) {
@@ -3627,6 +3739,20 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         body = formatText(message);
     } else {
         throw new Error('Cannot add element to chatbox');
+    }
+
+    // For a live message, anchor the displayed relative time on local
+    // receipt so it reads "just now" regardless of client/server clock
+    // skew; replayed history keeps its real server timestamp.  (Grouping
+    // still uses the server time below.)
+    let displayTime = (!history && time) ? new Date() : time;
+    // Screen-reader-only time suffix, refreshed by refreshChatTimes.
+    function srTimeSpan(t) {
+        let st = document.createElement('span');
+        st.className = 'sr-only sr-time';
+        st.dataset.time = String(t.getTime());
+        st.textContent = ` ${relativeTime(t)}`;
+        return st;
     }
 
     if(kind !== 'me') {
@@ -3643,6 +3769,9 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
 
         if(doHeader) {
             let header = document.createElement('p');
+            // Visual only; the reading comes from the sr-only name/time
+            // spans plus the message body below.
+            header.setAttribute('aria-hidden', 'true');
             let user = document.createElement('span');
             let u = dest && serverConnection.users[dest];
             let name = (u && u.username);
@@ -3655,16 +3784,25 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
             container.appendChild(header);
             if(time) {
                 let tm = document.createElement('span');
-                tm.textContent = formatTime(time);
+                tm.textContent = relativeTime(displayTime);
+                tm.dataset.time = String(displayTime.getTime());
                 tm.classList.add('message-time');
                 header.appendChild(tm);
             }
         }
 
+        if(sender) {
+            let srName = document.createElement('span');
+            srName.className = 'sr-only';
+            srName.textContent = `${sender}: `;
+            container.appendChild(srName);
+        }
         let p = document.createElement('p');
         p.appendChild(body);
         p.classList.add('message-content');
         container.appendChild(p);
+        if(displayTime)
+            container.appendChild(srTimeSpan(displayTime));
         lastMessage.nick = (nick || null);
         lastMessage.peerId = peerId;
         lastMessage.dest = (dest || null);
@@ -3677,18 +3815,32 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         user.textContent = nick || '(anon)';
         user.classList.add('message-me-user');
         body.classList.add('message-me-content');
+        asterisk.setAttribute('aria-hidden', 'true');
         container.appendChild(asterisk);
         container.appendChild(user);
         container.appendChild(body);
+        if(displayTime)
+            container.appendChild(srTimeSpan(displayTime));
         container.classList.add('message-me');
         lastMessage = {};
     }
     container.appendChild(footer);
 
     let box = document.getElementById('box');
+    // Your own message would otherwise be read back in full by the chat's
+    // live region.  Suppress that around the insert and just say "Sent".
+    // Others' messages and replayed history announce normally.
+    let ownLive = !history && peerId && serverConnection &&
+        peerId === serverConnection.id;
+    if(ownLive)
+        box.setAttribute('aria-live', 'off');
     box.appendChild(row);
     if(box.scrollHeight > box.clientHeight) {
         box.scrollTop = box.scrollHeight - box.clientHeight;
+    }
+    if(ownLive) {
+        announcePolite('Sent');
+        setTimeout(() => box.setAttribute('aria-live', 'polite'), 200);
     }
 
     return;

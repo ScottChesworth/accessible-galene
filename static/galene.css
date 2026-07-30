@@ -735,6 +735,19 @@ h1 {
     padding: 0;
 }
 
+/* Visually hidden, but read by screen readers. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* Active item in a native-mode listbox (participants / chat). */
 [role="option"].option-active {
     outline: 2px solid #8a7cff;

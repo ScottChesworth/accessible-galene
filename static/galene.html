@@ -105,7 +105,10 @@
                 </div>
               </div>
             </div>
-            <div id="resizer"></div>
+            <!-- Mouse-only drag handle to resize the chat/video split; useless
+                 to a screen reader and announced as a clickable blank, so hide
+                 it from the accessibility tree. -->
+            <div id="resizer" aria-hidden="true"></div>
             <div class="coln-right" id="right">
               <span class="show-video blink invisible" id="show-video">
                 <i class="fas fa-exchange-alt" aria-hidden="true"></i>

@@ -109,6 +109,8 @@ const earconTypes = [
     {name: 'raise', label: 'Raise hand'},
     {name: 'lower', label: 'Lower hand'},
     {name: 'notify', label: 'Another participant raises a hand'},
+    {name: 'message', label: 'Chat message received'},
+    {name: 'sent', label: 'Chat message sent'},
     {name: 'joined', label: 'Participant joined'},
     {name: 'left', label: 'Participant left'},
 ];
@@ -3997,8 +3999,16 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
     }
     if(ownLive) {
         announcePolite('Sent');
+        playEarcon('sent');
         setTimeout(() => box.setAttribute('aria-live', 'polite'), 200);
     }
+
+    // A live chat message from someone else gets an audible cue (on by
+    // default; toggled under Sound cues).  Skips your own messages, replayed
+    // history, and system lines (which have no peerId).
+    if(!history && peerId && serverConnection &&
+       peerId !== serverConnection.id)
+        playEarcon('message');
 
     return;
 }

@@ -1012,6 +1012,30 @@ h1 {
     width: 100%;
 }
 
+/* Disclosure button that opens the Settings panel.  Pinned to the bottom so
+   it comes last in reading order, and sits above the panel (z-index) so it
+   stays available to close it. */
+.settings-toggle {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: none;
+    border-top-left-radius: 6px;
+    background-color: #4d076b;
+    color: #ebebeb;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.settings-toggle:hover {
+    background-color: #66119c;
+}
+
 .sidenav {
     background-color: #4d076b;
     box-shadow: 0 0 24px 0 rgba(71,77,86,.1), 0 1px 0 0 rgba(71,77,86,.08);

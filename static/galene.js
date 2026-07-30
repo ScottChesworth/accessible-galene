@@ -4997,11 +4997,27 @@ document.getElementById('disconnectbutton').onclick = function(e) {
 };
 
 function openNav() {
-    document.getElementById("sidebarnav").style.width = "250px";
+    let panel = document.getElementById("sidebarnav");
+    panel.style.width = "250px";
+    // Reveal to the keyboard and the accessibility tree.  While closed the
+    // panel is inert, so its controls are not navigable until it is opened.
+    panel.removeAttribute('inert');
+    let btn = document.getElementById('openside');
+    if(btn)
+        btn.setAttribute('aria-expanded', 'true');
 }
 
 function closeNav() {
-    document.getElementById("sidebarnav").style.width = "0";
+    let panel = document.getElementById("sidebarnav");
+    panel.style.width = "0";
+    panel.setAttribute('inert', '');
+    let btn = document.getElementById('openside');
+    if(btn)
+        btn.setAttribute('aria-expanded', 'false');
+    // Focus would otherwise be stranded on a now-inert control (e.g. the
+    // panel's Close button), so return it to the toggle.
+    if(btn && btn.getClientRects().length > 0)
+        btn.focus();
 }
 
 document.getElementById('sidebarCollapse').onclick = function(e) {
@@ -5075,7 +5091,9 @@ function makeAccessibleButton(id, label) {
     });
 }
 
-makeAccessibleButton('openside', 'More options');
+// openside is a real <button> in the markup, so it needs no help; the panel's
+// close control is a click-only <a>, so make it keyboard-operable.
+makeAccessibleButton('clodeside', 'Close settings');
 makeAccessibleButton('show-chat', 'Show chat');
 makeAccessibleButton('close-chat', 'Hide chat');
 

@@ -1191,6 +1191,11 @@ header .collapse {
     color: #dbd9d9;
     margin-right: 20px;
     margin-left: 5px;
+    /* Reset native <button> chrome so it stays an icon-only control. */
+    background: none;
+    border: none;
+    padding: 0;
+    line-height: inherit;
 }
 
 header .collapse:hover {

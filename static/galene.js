@@ -5021,8 +5021,12 @@ function closeNav() {
 }
 
 document.getElementById('sidebarCollapse').onclick = function(e) {
-    document.getElementById("left-sidebar").classList.toggle("active");
+    let side = document.getElementById("left-sidebar");
+    side.classList.toggle("active");
     document.getElementById("mainrow").classList.toggle("full-width-active");
+    // .active collapses the panel to zero width, so it is shown when absent.
+    e.currentTarget.setAttribute('aria-expanded',
+        side.classList.contains('active') ? 'false' : 'true');
 };
 
 document.getElementById('openside').onclick = function(e) {

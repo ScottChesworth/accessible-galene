@@ -432,6 +432,23 @@ textarea.form-reply {
     margin-left: 1em;
 }
 
+/* Web-mode chat: sender is a real heading (browse-mode H quick-nav), reset
+   to the size/weight of the old italic header rather than a default h3. */
+.message-sender {
+    margin: 0;
+    padding-left: 5px;
+    font-size: 14px;
+    font-weight: 700;
+    font-style: italic;
+    color: #202035;
+}
+
+.message-timestamp {
+    padding-left: 5px;
+    font-size: 12px;
+    color: #606075;
+}
+
 .message-me-asterisk, .message-me-user {
     margin-right: 0.33em;
 }

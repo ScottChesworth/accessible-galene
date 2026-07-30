@@ -1029,6 +1029,88 @@ function setupListbox(box, activate, containerRole, isItem) {
 }
 
 /**
+ * Web-mode chat list following the Slack "focusable list item" pattern: a
+ * semantic list (role=list, listitem children) with a single roving
+ * tabindex="0" so Tab and F6 land on the newest message, but WITHOUT any
+ * custom arrow handling.  Navigation happens in the screen reader's browse
+ * mode (virtual cursor), so items are read and reviewed inline line by line
+ * and no focus-mode "N of M" position is announced.  Unlike a listbox this
+ * keeps descendant roles (e.g. links) intact.  The operator menu opens on
+ * the ContextMenu (applications) key on the focused message.
+ * @param {HTMLElement} box
+ * @param {(item: HTMLElement) => void} activate
+ * @param {(c: HTMLElement) => boolean} isItem
+ */
+function setupBrowseList(box, activate, isItem) {
+    box.setAttribute('role', 'list');
+    function items() {
+        return Array.prototype.filter.call(box.children,
+            c => c instanceof HTMLElement && isItem(c));
+    }
+    // Keep exactly one item as the roving tab stop (the last, i.e. newest) so
+    // Tab and F6 land in the list.  A tabindex on a non-widget listitem lets
+    // focus land without switching the reader out of browse mode.
+    function ensureTabStop() {
+        let all = items();
+        if(all.length === 0)
+            return;
+        if(!all.some(o => o.getAttribute('tabindex') === '0'))
+            all[all.length - 1].setAttribute('tabindex', '0');
+        for(let o of all)
+            if(o.getAttribute('tabindex') !== '0')
+                o.setAttribute('tabindex', '-1');
+    }
+    new MutationObserver(ensureTabStop).observe(box, {childList: true});
+    ensureTabStop();
+
+    function visible() {
+        return items().filter(c => c.getClientRects().length > 0);
+    }
+    function focusItem(it) {
+        for(let o of items())
+            o.setAttribute('tabindex', o === it ? '0' : '-1');
+        if(it) {
+            it.focus();
+            it.scrollIntoView({block: 'nearest'});
+        }
+    }
+
+    box.addEventListener('keydown', function(e) {
+        // In browse mode the screen reader consumes the arrows for its
+        // virtual cursor, so this handler only fires in focus mode -- where
+        // moving real focus is what makes arrow navigation work (at the cost
+        // of a spoken position, inherent to focus mode).  Browse mode is
+        // unaffected and stays free of the "N of M" count.
+        let opts = visible();
+        if(opts.length === 0)
+            return;
+        let idx = opts.indexOf(
+            /** @type{HTMLElement} */(document.activeElement));
+        let next = idx;
+        switch(e.key) {
+        case 'ArrowDown': next = idx < 0 ? 0 : Math.min(opts.length - 1, idx + 1); break;
+        case 'ArrowUp': next = idx < 0 ? opts.length - 1 : Math.max(0, idx - 1); break;
+        case 'Home': next = 0; break;
+        case 'End': next = opts.length - 1; break;
+        case 'Enter':
+        case 'ContextMenu': {
+            let it = idx >= 0 ? opts[idx] :
+                /** @type{HTMLElement} */(document.activeElement);
+            if(it && isItem(it) && activate) {
+                e.preventDefault();
+                activate(it);
+            }
+            return;
+        }
+        default:
+            return;
+        }
+        e.preventDefault();
+        focusItem(opts[next]);
+    });
+}
+
+/**
  * The roving tab stop (real focus target) of a listbox/application set up by
  * setupListbox, or the container itself if it has no items yet.
  * @param {HTMLElement} box
@@ -1141,19 +1223,27 @@ function accessibleMenu(items, ev) {
 // (non-widget) list does not switch the reader out of browse mode.
 {
     let box = document.getElementById('box');
-    if(box)
-        // A listbox navigated by moving real focus between message options
-        // (see setupListbox): a tab stop and arrow-navigable, and real focus
-        // lets the review cursor reach a message by object navigation.  A
-        // screen reader announces an "N of M" position per option; that is an
-        // accepted NVDA behaviour that can't be suppressed from markup (see
-        // nvaccess/nvda #9823).  The operator actions menu opens on Enter, so
-        // no click handler / "clickable" is added.
-        setupListbox(box, opt => {
-            let m = opt.querySelector('.message');
-            if(m instanceof HTMLElement)
-                chatMessageMenu(m);
-        }, 'listbox', c => c.classList.contains('message-row'));
+    let openMenu = opt => {
+        let m = opt.querySelector('.message');
+        if(m instanceof HTMLElement)
+            chatMessageMenu(m);
+    };
+    let isRow = c => c.classList.contains('message-row');
+    if(box && uiIsNative())
+        // Native mode: an ARIA listbox navigated by moving real focus between
+        // message options (see setupListbox) -- a tab stop and arrow-
+        // navigable, and real focus lets the review cursor reach a message by
+        // object navigation.  A screen reader announces "N of M" per option;
+        // that is inherent to a focus-mode widget and can't be suppressed
+        // from markup (nvaccess/nvda #9823).  The operator menu opens on Enter.
+        setupListbox(box, openMenu, 'listbox', isRow);
+    else if(box)
+        // Web mode (prototype): a semantic list (role=list / listitem) that is
+        // a tab stop via a roving tabindex, but navigated in the screen
+        // reader's browse mode -- there is no real-focus arrow handler, so it
+        // stays document content, not a focus-mode widget.  That keeps each
+        // message readable/reviewable inline and drops the "N of M" position.
+        setupBrowseList(box, openMenu, isRow);
 }
 // The participants list is a listbox, only in native mode.
 if(uiIsNative()) {
@@ -3629,6 +3719,34 @@ function relativeTime(time) {
     return `${d} day${d === 1 ? '' : 's'} ago`;
 }
 
+// Zero-width / format characters that trailing-whitespace trimming must also
+// strip (ZWSP..ZWJ, word joiner, BOM); built from code points so the source
+// stays plain ASCII.
+const trailingBlank = new RegExp(
+    '[\\s' + [0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF]
+        .map(c => String.fromCharCode(c)).join('') + ']+$', 'u');
+
+/**
+ * Give a message body a clean reading tail: trim trailing whitespace and
+ * zero-width characters from its last text node, and, if it doesn't already
+ * end in punctuation, append a period.  The period lands inside the same text
+ * node (not an isolated node), so a screen reader treats it as a sentence
+ * pause before the timestamp rather than speaking the word "dot".
+ * @param {HTMLElement} el
+ */
+function appendReadingPause(el) {
+    let last = el.lastChild;
+    // Only when the message ends in text (not a link); 3 = TEXT_NODE.
+    if(!last || last.nodeType !== 3)
+        return;
+    let s = last.nodeValue.replace(trailingBlank, '');
+    if(!s)
+        return;
+    if(!/[.!?,:;)\]}]$/u.test(s))
+        s += '.';
+    last.nodeValue = s;
+}
+
 // Keep relative times fresh: the visible header time and the screen-reader
 // -only time suffix on each message.
 function refreshChatTimes() {
@@ -3645,11 +3763,14 @@ function refreshChatTimes() {
     }
     for(let tm of box.querySelectorAll('.message-time[data-time]')) {
         let t = /** @type{HTMLElement} */(tm);
-        setText(t, relativeTime(new Date(Number(t.dataset.time))));
+        // The web-mode timestamp keeps a trailing period (set when created);
+        // the native header time does not.
+        let s = relativeTime(new Date(Number(t.dataset.time)));
+        setText(t, t.classList.contains('message-timestamp') ? s + '.' : s);
     }
     for(let st of box.querySelectorAll('.sr-time[data-time]')) {
         let e = /** @type{HTMLElement} */(st);
-        setText(e, ' ' + relativeTime(new Date(Number(e.dataset.time))));
+        setText(e, ' ' + relativeTime(new Date(Number(e.dataset.time))) + '.');
     }
 }
 setInterval(refreshChatTimes, 60000);
@@ -3682,16 +3803,17 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         return;
     }
 
+    let native = uiIsNative();
     let row = document.createElement('div');
     row.classList.add('message-row');
     // Id lets the chat widget point aria-activedescendant at this message.
     row.id = 'msg-' + (++chatMsgSeq);
-    // Web mode presents the chat as a listbox (options); native mode uses a
-    // An option in the chat listbox.  Real focus moves onto it (see
-    // setupListbox), so the reader's navigator object lands on the message
-    // and its text can be reviewed by object navigation.  Its name comes
-    // from its own content (no aria-label leaf).
-    row.setAttribute('role', 'option');
+    // Native mode: an option in the chat listbox — real focus moves onto it
+    // (see setupListbox) so the reader's navigator lands on the message and
+    // its text is reviewable by object navigation; its name comes from its
+    // own content (no aria-label leaf).  Web mode (prototype): a plain list
+    // item, so it stays readable inline in browse mode.
+    row.setAttribute('role', native ? 'option' : 'listitem');
     let container = document.createElement('div');
     container.classList.add('message');
     row.appendChild(container);
@@ -3716,10 +3838,10 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         // chat setup).
     }
 
-    // Screen-reader reading: the row's accessible name is built from real
-    // text — an sr-only "Name:" prefix, the visible message body, and an
-    // sr-only relative-time suffix — so it announces as one phrase yet the
-    // body (with any links) stays walkable by the review cursor.
+    // Screen-reader reading is built from real text (no aria-label), so the
+    // body and its links stay walkable by the review cursor.  Native mode
+    // wraps it in sr-only "Name:"/time spans (read as one phrase in the
+    // listbox); web mode uses the visible sender heading + timestamp below.
     let destName = dest && serverConnection.users[dest] &&
         serverConnection.users[dest].username;
     let sender;
@@ -3737,6 +3859,9 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         body = message;
     } else if(typeof message === 'string') {
         body = formatText(message);
+        // Trim and add a sentence-ending period so the reader pauses between
+        // the message and the timestamp/position that follow it.
+        appendReadingPause(body);
     } else {
         throw new Error('Cannot add element to chatbox');
     }
@@ -3751,7 +3876,9 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         let st = document.createElement('span');
         st.className = 'sr-only sr-time';
         st.dataset.time = String(t.getTime());
-        st.textContent = ` ${relativeTime(t)}`;
+        // Trailing period separates the time from the "N of M" position the
+        // listbox speaks after it, so it is easy to tune out.
+        st.textContent = ` ${relativeTime(t)}.`;
         return st;
     }
 
@@ -3767,10 +3894,11 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
             doHeader = delta < 0 || delta > 60000;
         }
 
-        if(doHeader) {
+        if(doHeader && native) {
+            // Native only: a visual, aria-hidden header; the reading comes
+            // from the sr-only name/time spans plus the message body below.
+            // (Web mode uses a real sender heading + timestamp instead.)
             let header = document.createElement('p');
-            // Visual only; the reading comes from the sr-only name/time
-            // spans plus the message body below.
             header.setAttribute('aria-hidden', 'true');
             let user = document.createElement('span');
             let u = dest && serverConnection.users[dest];
@@ -3791,18 +3919,47 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
             }
         }
 
-        if(sender) {
-            let srName = document.createElement('span');
-            srName.className = 'sr-only';
-            srName.textContent = `${sender}: `;
-            container.appendChild(srName);
+        if(native) {
+            if(sender) {
+                let srName = document.createElement('span');
+                srName.className = 'sr-only';
+                srName.textContent = `${sender}: `;
+                container.appendChild(srName);
+            }
+            let p = document.createElement('p');
+            p.appendChild(body);
+            p.classList.add('message-content');
+            container.appendChild(p);
+            if(displayTime)
+                container.appendChild(srTimeSpan(displayTime));
+        } else {
+            // Web prototype: read from visible, DOM-ordered parts (sender
+            // heading, body, timestamp) — no sr-only duplication, no
+            // aria-label.  The sender is a heading so browse-mode users can
+            // jump message-to-message with the H quick-nav key; consecutive
+            // messages from the same sender omit it (see doHeader).  Visual
+            // reordering, if ever wanted, belongs in CSS, not the DOM.
+            if(doHeader && sender) {
+                let h = document.createElement('h3');
+                h.className = 'message-sender';
+                h.textContent = `${sender}:`;
+                container.appendChild(h);
+            }
+            let p = document.createElement('p');
+            p.appendChild(body);
+            p.classList.add('message-content', 'message-body');
+            container.appendChild(p);
+            if(displayTime) {
+                let tm = document.createElement('span');
+                // message-time is refreshed in place by refreshChatTimes.  The
+                // trailing period separates the time from the "N of M" position
+                // NVDA speaks after it in focus mode, so it is easy to tune out.
+                tm.className = 'message-time message-timestamp';
+                tm.dataset.time = String(displayTime.getTime());
+                tm.textContent = relativeTime(displayTime) + '.';
+                container.appendChild(tm);
+            }
         }
-        let p = document.createElement('p');
-        p.appendChild(body);
-        p.classList.add('message-content');
-        container.appendChild(p);
-        if(displayTime)
-            container.appendChild(srTimeSpan(displayTime));
         lastMessage.nick = (nick || null);
         lastMessage.peerId = peerId;
         lastMessage.dest = (dest || null);

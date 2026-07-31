@@ -1019,6 +1019,16 @@ document.addEventListener('keydown', function(e) {
     focusPane(next);
 });
 
+// The native UI is an app-style, focus-mode experience, so #main carries
+// role="application" in the markup (present from first parse, so screen
+// readers enter focus mode immediately).  The web UI is the browse-mode
+// comparison, so drop the role there to keep normal document navigation.
+if(!uiIsNative()) {
+    let main = document.getElementById('main');
+    if(main)
+        main.removeAttribute('role');
+}
+
 // When the mode was set explicitly via ?ui=, confirm it out loud so the
 // current interface is unambiguous while comparing across devices.
 if(window.uiModeExplicit)

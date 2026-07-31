@@ -9,8 +9,8 @@
 // Resolution order:
 //   1. ?ui=native | web | auto  in the URL (and it is remembered)
 //   2. the previously remembered choice
-//   3. auto: native when launched as an installed/standalone app,
-//      otherwise web.
+//   3. auto (the default): native.  Native is the app-style, focus-mode
+//      experience we ship by default; only an explicit web choice opts out.
 //
 // Note: a URL cannot make the browser draw a chromeless standalone
 // window; that only happens once the PWA is installed.  The URL switch
@@ -57,17 +57,8 @@
 
     var choice = param || stored || 'auto';
 
-    var standalone = false;
-    try {
-        standalone =
-            (window.matchMedia &&
-             window.matchMedia('(display-mode: standalone)').matches) ||
-            window.navigator.standalone === true;
-    } catch(e) { /* ignore */ }
-
-    var mode = choice === 'native' ? 'native' :
-               choice === 'web' ? 'web' :
-               (standalone ? 'native' : 'web');
+    // Native is the default; only an explicit web choice opts out.
+    var mode = choice === 'web' ? 'web' : 'native';
 
     document.documentElement.setAttribute('data-ui', mode);
     // Exposed for the app: current mode, and whether it was set explicitly

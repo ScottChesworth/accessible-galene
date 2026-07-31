@@ -3896,8 +3896,11 @@ function refreshChatTimes() {
     let box = document.getElementById('box');
     if(!box)
         return;
-    // Update in place (characterData) so it doesn't count as a node addition
-    // the live region would announce.
+    // Editing the time in place (characterData) avoids a node-addition
+    // announcement, but a polite live region still announces text changes,
+    // so a screen reader would re-read every message's time each minute.
+    // Suppress the region around the refresh and restore it on the next tick.
+    box.setAttribute('aria-live', 'off');
     function setText(el, s) {
         if(el.firstChild && el.firstChild.nodeType === 3)
             el.firstChild.nodeValue = s;
@@ -3915,6 +3918,7 @@ function refreshChatTimes() {
         let e = /** @type{HTMLElement} */(st);
         setText(e, ' ' + relativeTime(new Date(Number(e.dataset.time))) + '.');
     }
+    setTimeout(() => box.setAttribute('aria-live', 'polite'), 200);
 }
 setInterval(refreshChatTimes, 60000);
 

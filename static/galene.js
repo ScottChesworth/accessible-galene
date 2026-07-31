@@ -5094,6 +5094,31 @@ function playEarcon(name) {
     }
 }
 
+// iOS Safari only allows an <audio> element's first .play() to succeed from
+// directly inside a user gesture (tap/click/key).  An earcon triggered by a
+// WebSocket event (e.g. a chat message arriving) has no such gesture, so it
+// would otherwise always be silently blocked.  Once an element HAS played
+// inside a gesture, iOS keeps it unlocked for later programmatic playback --
+// so prime every earcon on the session's first gesture of any kind.
+let earconsUnlocked = false;
+function unlockEarcons() {
+    if(earconsUnlocked)
+        return;
+    earconsUnlocked = true;
+    for(let t of earconTypes) {
+        let a = earcons[t.name];
+        if(!a) {
+            a = new Audio(`/sounds/${t.name}.wav`);
+            earcons[t.name] = a;
+        }
+        let p = a.play();
+        if(p && typeof p.then === 'function')
+            p.then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+    }
+}
+for(let ev of ['pointerdown', 'keydown', 'touchend'])
+    document.addEventListener(ev, unlockEarcons, {once: true, passive: true});
+
 function displayError(message, level) {
     if(message instanceof Error)
         message = message.message;

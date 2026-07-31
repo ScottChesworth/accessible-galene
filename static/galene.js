@@ -5201,6 +5201,18 @@ document.getElementById('loginform').onsubmit = async function(e) {
     if(!(form instanceof HTMLFormElement))
         throw new Error('Bad type for loginform');
 
+    // The join message is the only place a username is ever set, so refuse
+    // to connect with a blank name rather than let someone land as "(anon)".
+    let usernameInput = getInputElement('username');
+    if(usernameInput.value.trim() === '') {
+        displayWarning(
+            'Please type a name before connecting. It lets other ' +
+            'participants (and you) tell who is speaking.'
+        );
+        usernameInput.focus();
+        return;
+    }
+
     if(getInputElement('presentmike').checked)
         presentRequested = 'mike';
     else

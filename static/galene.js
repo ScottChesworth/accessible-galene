@@ -965,6 +965,31 @@ function uiIsNative() {
 }
 
 /**
+ * Whether the device has a coarse (touch) pointer, e.g. a phone or tablet.
+ * @returns {boolean}
+ */
+function isCoarsePointer() {
+    return !!(window.matchMedia &&
+        window.matchMedia('(pointer: coarse)').matches);
+}
+
+/**
+ * Whether the participants list and chat should be built as ARIA
+ * listbox/option widgets (real DOM focus, roving tabindex) rather than
+ * plain, individually-reviewable content.  The listbox form is what native
+ * mode uses to force focus mode on desktop screen readers (NVDA/JAWS),
+ * which have a browse/focus-mode split it's forcing a switch between.  iOS
+ * VoiceOver (and touch screen readers generally) have no such split, and
+ * are known to collapse a listbox and its options into a single swipe stop
+ * instead of exposing each item -- the opposite of what we want -- so touch
+ * devices always get the plain form regardless of native/web UI choice.
+ * @returns {boolean}
+ */
+function useListboxWidgets() {
+    return uiIsNative() && !isCoarsePointer();
+}
+
+/**
  * The first visible control in the toolbar, or null.
  * @returns {HTMLElement}
  */
@@ -1391,24 +1416,30 @@ function accessibleMenu(items, ev) {
             chatMessageMenu(m);
     };
     let isRow = c => c.classList.contains('message-row');
-    if(box && uiIsNative())
-        // Native mode: an ARIA listbox navigated by moving real focus between
-        // message options (see setupListbox) -- a tab stop and arrow-
-        // navigable, and real focus lets the review cursor reach a message by
-        // object navigation.  A screen reader announces "N of M" per option;
-        // that is inherent to a focus-mode widget and can't be suppressed
-        // from markup (nvaccess/nvda #9823).  The operator menu opens on Enter.
+    if(box && useListboxWidgets())
+        // Desktop native mode: an ARIA listbox navigated by moving real focus
+        // between message options (see setupListbox) -- a tab stop and
+        // arrow-navigable, and real focus lets the review cursor reach a
+        // message by object navigation.  A screen reader announces "N of M"
+        // per option; that is inherent to a focus-mode widget and can't be
+        // suppressed from markup (nvaccess/nvda #9823).  The operator menu
+        // opens on Enter.  Touch devices never get this (see
+        // useListboxWidgets): iOS VoiceOver collapses a listbox and its
+        // options into a single swipe stop instead of exposing each message.
         setupListbox(box, openMenu, 'listbox', isRow);
     else if(box)
-        // Web mode (prototype): a semantic list (role=list / listitem) that is
-        // a tab stop via a roving tabindex, but navigated in the screen
-        // reader's browse mode -- there is no real-focus arrow handler, so it
-        // stays document content, not a focus-mode widget.  That keeps each
-        // message readable/reviewable inline and drops the "N of M" position.
+        // Web mode, and native mode on touch devices: a semantic list
+        // (role=list / listitem) that is a tab stop via a roving tabindex,
+        // but navigated in the screen reader's browse mode -- there is no
+        // real-focus arrow handler, so it stays document content, not a
+        // focus-mode widget.  That keeps each message readable/reviewable
+        // inline and drops the "N of M" position.
         setupBrowseList(box, openMenu, isRow);
 }
-// The participants list is a listbox, only in native mode.
-if(uiIsNative()) {
+// The participants list is a listbox, except on touch devices (see
+// useListboxWidgets) -- iOS VoiceOver has the same single-swipe-stop
+// collapse problem here as it does for chat.
+if(useListboxWidgets()) {
     let users = document.getElementById('users');
     if(users)
         setupListbox(users, opt => userMenu(opt),
@@ -3136,7 +3167,7 @@ function addUser(id, userinfo) {
     let user = document.createElement('div');
     user.id = 'user-' + id;
     user.classList.add("user-p");
-    if(uiIsNative()) {
+    if(useListboxWidgets()) {
         // An option in the participants listbox (see setupListbox), which
         // moves real focus between options with a roving tabindex and
         // handles Enter/Space itself.
@@ -3154,9 +3185,10 @@ function addUser(id, userinfo) {
             throw new Error("Couldn't find user div");
         userMenu(elt, e);
     });
-    // Web mode's plain buttons need their own Enter/Space; in native the
-    // listbox handler covers it (avoid opening the menu twice).
-    if(!uiIsNative())
+    // Plain buttons (web mode, or native mode on a touch device) need their
+    // own Enter/Space; the listbox variant's own handler covers it (avoid
+    // opening the menu twice).
+    if(!useListboxWidgets())
         user.addEventListener('keydown', function(e) {
             if(e.key !== 'Enter' && e.key !== ' ')
                 return;
@@ -3491,9 +3523,7 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
     // then changes nothing about focus, so it's a no-op and the keyboard
     // never appears.  Not auto-focusing means the user's own tap is a real
     // focus change that brings the keyboard up.
-    let coarsePointer = window.matchMedia &&
-        window.matchMedia('(pointer: coarse)').matches;
-    if(!present && !coarsePointer)
+    if(!present && !isCoarsePointer())
         input.focus();
 
     // When comparing GUI modes, re-confirm which interface we're in once
@@ -4027,7 +4057,9 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         return;
     }
 
-    let native = uiIsNative();
+    // Whether this row should be built as a listbox option (see
+    // useListboxWidgets) rather than plain, individually-reviewable content.
+    let native = useListboxWidgets();
     let row = document.createElement('div');
     row.classList.add('message-row');
     // Id lets the chat widget point aria-activedescendant at this message.

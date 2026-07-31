@@ -1109,7 +1109,10 @@ function setupListbox(box, activate, containerRole, isItem) {
         case 'End': next = opts.length - 1; break;
         case 'Enter':
         case ' ':
-        case 'ContextMenu': {
+        case 'ContextMenu':
+        // Right arrow expands the item's popup menu, tree-style; the menu
+        // itself closes on Left arrow (see accessibleMenu), returning here.
+        case 'ArrowRight': {
             e.preventDefault();
             let target = idx >= 0 ? opts[idx] : opts[opts.length - 1];
             if(target && activate)
@@ -1236,6 +1239,12 @@ function accessibleMenu(items, ev) {
     menu.className = 'a11y-menu';
     menu.setAttribute('role', 'menu');
 
+    // A separator otherwise makes the reader treat each run of items as its
+    // own set ("Send file, 1 of 1", then "Allow presenting, 1 of 4").  Set
+    // explicit posinset/setsize across every menuitem so it counts as one
+    // set of N regardless of separators.
+    let total = items.filter(it => it && it.type !== 'seperator').length;
+    let pos = 0;
     let entries = [];
     for(let it of items) {
         if(!it || it.type === 'seperator') {
@@ -1247,6 +1256,8 @@ function accessibleMenu(items, ev) {
         let mi = document.createElement('button');
         mi.type = 'button';
         mi.setAttribute('role', 'menuitem');
+        mi.setAttribute('aria-setsize', String(total));
+        mi.setAttribute('aria-posinset', String(++pos));
         mi.tabIndex = -1;
         mi.textContent = it.label;
         mi.addEventListener('click', function() {
@@ -1278,7 +1289,9 @@ function accessibleMenu(items, ev) {
         case 'Home': e.preventDefault(); focusAt(0); break;
         case 'End': e.preventDefault(); focusAt(entries.length - 1); break;
         case 'Escape':
-        case 'Tab': e.preventDefault(); close(); break;
+        case 'Tab':
+        // Left arrow collapses the submenu, tree-style, back to the anchor.
+        case 'ArrowLeft': e.preventDefault(); close(); break;
         }
     }
     function onOutside(e) {

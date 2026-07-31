@@ -179,7 +179,7 @@ function setRange(id, val) {
 function reflectMicProcessing() {
     let agc = document.getElementById('agcbox');
     if(agc instanceof HTMLInputElement)
-        agc.checked = !!getSettings().micAGC;
+        agc.checked = getSettings().micAGC !== false;
     let l = micLimiterSettings();
     let lim = document.getElementById('limiterbox');
     if(lim instanceof HTMLInputElement)
@@ -808,8 +808,8 @@ window.addEventListener('pointerup', function(e) {
 {
     let micgain = getInputElement('micgain');
     if(micgain) {
-        let g = getSettings().micGain;
-        micgain.value = String(typeof g === 'number' ? g : 100);
+        let g = getSettings().micGainDb;
+        micgain.value = String(typeof g === 'number' ? g : 0);
         micgain.oninput = function() {
             // The native range control announces its own value to the
             // screen reader, so no explicit announcement here.
@@ -909,8 +909,8 @@ window.addEventListener('blur', function() {
 });
 
 /**
- * Global microphone-level shortcuts: Ctrl+Shift+Up and Ctrl+Shift+Down
- * nudge the mic gain by 5% and announce the new value (value first, so
+ * Global microphone-gain shortcuts: Ctrl+Shift+Up and Ctrl+Shift+Down
+ * nudge the mic gain by 3 dB and announce the new value (value first, so
  * the changing number is heard immediately on repeated presses).
  */
 document.addEventListener('keydown', function(e) {
@@ -918,18 +918,23 @@ document.addEventListener('keydown', function(e) {
         return;
     let delta;
     switch(e.key) {
-    case 'ArrowUp': delta = 5; break;
-    case 'ArrowDown': delta = -5; break;
+    case 'ArrowUp': delta = 3; break;
+    case 'ArrowDown': delta = -3; break;
     default: return;
     }
     if(!getVisibility('micgain-item'))
         return;
     e.preventDefault();
-    let g = getSettings().micGain;
+    let g = getSettings().micGainDb;
     if(typeof g !== 'number')
-        g = 100;
+        g = 0;
     let v = setMicGain(g + delta);
-    announcePolite(`${v}% microphone level`);
+    // AGC (upstream of this gain, see addLocalMedia) already normalises the
+    // raw capture toward its own target level, so this slider's dB stacks
+    // on top of that rather than starting from silence -- worth knowing,
+    // since it means less headroom is left before the limiter kicks in.
+    let agc = getSettings().micAGC !== false ? ' applied after AGC' : '';
+    announcePolite(`${v} dB microphone gain${agc}`);
 });
 
 /**
@@ -2051,12 +2056,16 @@ async function addLocalMedia(localId) {
     }
 
     if(audio) {
-        // Browser AGC normalises the capture toward a fixed target level
-        // (boosting quiet, attenuating loud), which cancels the mic-gain
-        // slider in both directions.  Default it off so the slider and our
-        // downstream limiter (see applyMicGain) are in charge; exposed as a
-        // setting for testing.
-        audio.autoGainControl = !!settings.micAGC;
+        // AGC runs inside getUserMedia's own capture pipeline, entirely
+        // upstream of our gain node and limiter (see applyMicGain) -- it
+        // can't see or be influenced by them, since our graph only ever
+        // receives the already-AGC'd track.  So the two stack rather than
+        // fight: AGC normalises the raw capture toward its own target level
+        // (roughly -18 dBFS), then our slider's dB is applied on top of
+        // that.  On by default since most mics are otherwise too quiet even
+        // at the top of the slider's range; exposed as a setting for
+        // testing.
+        audio.autoGainControl = settings.micAGC !== false;
         if(!settings.preprocessing) {
             audio.echoCancellation = false;
             audio.noiseSuppression = false;
@@ -2262,14 +2271,18 @@ let micLimiterNode = null;
 let micRawStream = null;
 
 /**
- * The stored mic gain as a linear factor (1.0 == 100%).
+ * The stored mic gain (dB) as a linear factor.  A percentage-based slider
+ * topped out at +6 dB (200%), nowhere near enough to bring a quiet mic
+ * (typically -40 to -50 dBFS raw) up to a normal conversational level
+ * (roughly -20 dBFS, needing +20 to +30 dB) -- hence dB units and a wider
+ * range here, consistent with the limiter's dBFS controls.
  * @returns {number}
  */
 function micGainValue() {
-    let g = getSettings().micGain;
-    if(typeof g !== 'number' || !(g >= 0))
-        g = 100;
-    return g / 100;
+    let db = getSettings().micGainDb;
+    if(typeof db !== 'number')
+        db = 0;
+    return Math.pow(10, db / 20);
 }
 
 /**
@@ -2367,22 +2380,21 @@ function applyMicGain(stream) {
 }
 
 /**
- * Set the microphone level (percent), clamped to 10-200 and snapped to
- * 5% steps (10% is the floor since 0% would just duplicate mute).  Keeps
- * the slider, the stored setting, and the live gain node in sync, and
- * returns the value actually applied.
+ * Set the microphone gain in dB, clamped to -20..+30 and snapped to 1 dB
+ * steps.  Keeps the slider, the stored setting, and the live gain node in
+ * sync, and returns the value actually applied.
  *
  * @param {number} v
  * @returns {number}
  */
 function setMicGain(v) {
-    v = Math.max(10, Math.min(200, Math.round(v / 5) * 5));
+    v = Math.max(-20, Math.min(30, Math.round(v)));
     let micgain = getInputElement('micgain');
     if(micgain)
         micgain.value = String(v);
-    updateSettings({micGain: v});
+    updateSettings({micGainDb: v});
     if(micGainNode)
-        micGainNode.gain.value = v / 100;
+        micGainNode.gain.value = Math.pow(10, v / 20);
     return v;
 }
 

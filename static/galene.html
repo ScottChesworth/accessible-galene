@@ -68,9 +68,9 @@
                   </button>
                 </li>
                 <li id="micgain-item" class="invisible">
-                  <label for="micgain" class="nav-text">Mic level</label>
-                  <input id="micgain" type="range" min="10" max="200" value="100" step="5"
-                         aria-label="Microphone level"/>
+                  <label for="micgain" class="nav-text">Mic gain (dB)</label>
+                  <input id="micgain" type="range" min="-20" max="30" value="0" step="1"
+                         aria-label="Microphone gain in decibels"/>
                 </li>
                 <li>
                   <button id="raisehandbutton" class="invisible btn btn-default" aria-label="Raise hand" aria-pressed="false" aria-keyshortcuts="Control+H">
@@ -245,7 +245,7 @@
           <legend>Microphone processing (testing)</legend>
 
           <form>
-            <input id="agcbox" type="checkbox"/>
+            <input id="agcbox" type="checkbox" checked/>
             <label for="agcbox">Automatic gain control (browser AGC)</label>
           </form>
 

@@ -1557,34 +1557,6 @@ getInputElement('displayallbox').onchange = function(e) {
 
 
 /**
- * @this {Stream}
- * @param {Record<string,any>} stats
- */
-function gotUpStats(stats) {
-    let c = this;
-
-    let values = [];
-
-    for(let id in stats) {
-        if(stats[id] && stats[id]['outbound-rtp']) {
-            let rate = stats[id]['outbound-rtp'].rate;
-            if(typeof rate === 'number') {
-                values.push(rate);
-            }
-        }
-    }
-
-    if(values.length === 0) {
-        setLabel(c, '');
-    } else {
-        values.sort((x,y) => x - y);
-        setLabel(c, values
-                 .map(x => Math.round(x / 1000).toString())
-                 .reduce((x, y) => x + '+' + y));
-    }
-}
-
-/**
  * @param {Stream} c
  * @param {boolean} value
  */
@@ -1991,8 +1963,6 @@ async function setUpStream(c, stream) {
         }
     };
 
-    c.onstats = gotUpStats;
-    c.setStatsInterval(2000);
 }
 
 /**
@@ -2576,6 +2546,13 @@ async function setMedia(c, mirror, video) {
         media.autoplay = true;
         media.playsInline = true;
         media.id = 'media-' + c.localId;
+        // Audio-only build: suppress the browser's native <video> chrome --
+        // the Picture-in-Picture "pop out" button (which shows as an
+        // unlabeled button to screen readers) and the fullscreen/download/
+        // playback-rate controls -- none of which make sense with no video.
+        media.disablePictureInPicture = true;
+        media.setAttribute('controlsList',
+            'nofullscreen nodownload noplaybackrate noremoteplayback');
         div.appendChild(media);
         addCustomControls(media, div, c, !!video);
     }

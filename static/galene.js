@@ -3311,6 +3311,15 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
         if(probingState === 'probing' && error === 'need-username') {
             probingState = 'need-username';
             setVisibility('passwordform', false);
+        } else if(error === 'locked') {
+            // Refused because no host/operator is present yet (autolock).
+            // This isn't the attendee's fault, so show it as a calm,
+            // actionable message (not a red error) and leave the login form
+            // ready so they can just press Connect again.  The #announcer
+            // live region speaks it for screen-reader users.
+            token = null;
+            displayMessage(message);
+            setTimeout(() => getInputElement('connectbutton').focus(), 0);
         } else if(message === 'not authorised' &&
                   !getVisibility('passwordform')) {
             // The name is registered to an operator, so a password is
@@ -3654,7 +3663,12 @@ function gotUserMessage(id, dest, username, time, privileged, kind, error, messa
             return;
         }
         let from = id ? (username || 'Anonymous') : 'The Server';
-        displayError(`${from} said: ${message}`, kind);
+        if(kind === 'kicked' && !id)
+            // Server-initiated kick (e.g. autokick when the last host
+            // leaves): show the message plainly, without "The Server said:".
+            displayError(message, kind);
+        else
+            displayError(`${from} said: ${message}`, kind);
         break;
     }
     case 'mute': {

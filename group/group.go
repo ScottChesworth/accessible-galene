@@ -63,6 +63,29 @@ func (err UserError) Error() string {
 	return string(err)
 }
 
+// LockedError is returned when a client is refused because the group is
+// locked (including automatically, before an operator is present).  It is a
+// distinct type so the client can show a clearer, actionable message than a
+// bare "this group is locked".
+type LockedError string
+
+func (err LockedError) Error() string {
+	return string(err)
+}
+
+// lockedDefaultMessage is the placeholder stored when a group locks
+// automatically.  The join path swaps it for hostNotPresentMessage; a custom
+// message set by an operator is shown as-is instead.
+const lockedDefaultMessage = "this group is locked"
+
+// hostNotPresentMessage is shown to an attendee refused because no operator
+// is present yet, whether the group uses autolock or autokick.
+const hostNotPresentMessage = "The room isn't open yet. A host needs to do that before you can join. Give it a minute, then try pressing Connect again."
+
+// hostLeftMessage is shown to attendees removed by autokick when the last
+// operator leaves mid-session (a kick, not a join refusal).
+const hostLeftMessage = "The last host has left, so the room has closed. You can rejoin once a host returns."
+
 type KickError struct {
 	Id       string
 	Username *string
@@ -626,10 +649,10 @@ func AddClient(group string, c Client, creds ClientCredentials) (*Group, error) 
 		if !slices.Contains(perms, "op") {
 			if g.locked != nil {
 				m := *g.locked
-				if m == "" {
-					m = "this group is locked"
+				if m == "" || m == lockedDefaultMessage {
+					m = hostNotPresentMessage
 				}
-				return nil, UserError(m)
+				return nil, LockedError(m)
 			}
 			if g.description.NotBefore != nil ||
 				g.description.Expires != nil {
@@ -658,9 +681,8 @@ func AddClient(group string, c Client, creds ClientCredentials) (*Group, error) 
 					}
 				}
 				if !ops {
-					return nil, UserError(
-						"there are no operators " +
-							"in this group",
+					return nil, LockedError(
+						hostNotPresentMessage,
 					)
 				}
 			}
@@ -713,7 +735,7 @@ func autoLockKick(g *Group) {
 		}
 	}
 	if g.description.Autolock && g.locked == nil {
-		m := "this group is locked"
+		m := lockedDefaultMessage
 		g.locked = &m
 		for _, c := range clients {
 			c.Joined(g.Name(), "change")
@@ -726,10 +748,7 @@ func autoLockKick(g *Group) {
 		// spuriously kick out an operator.
 		go func(clients []Client) {
 			for _, c := range clients {
-				c.Kick(
-					"", nil,
-					"there are no operators in this group",
-				)
+				c.Kick("", nil, hostLeftMessage)
 			}
 		}(g.getClientsUnlocked(nil))
 	}

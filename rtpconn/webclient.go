@@ -44,7 +44,7 @@ func errorToWSCloseMessage(id string, err error) (*clientMessage, []byte) {
 			Value:      e.Error(),
 		}
 		text = e.Error()
-	case group.UserError, group.KickError:
+	case group.UserError, group.KickError, group.LockedError:
 		code = websocket.CloseNormalClosure
 		m = errorMessage(id, err)
 		text = e.Error()
@@ -1430,6 +1430,9 @@ func handleClientMessage(c *webClient, m clientMessage) error {
 				log.Printf("Join group: %v", err)
 			} else if errors.Is(err, os.ErrNotExist) {
 				s = "group does not exist"
+			} else if _, ok := err.(group.LockedError); ok {
+				s = err.Error()
+				e = "locked"
 			} else if _, ok := err.(group.UserError); ok {
 				s = err.Error()
 			} else {

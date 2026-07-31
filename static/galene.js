@@ -920,12 +920,19 @@ window.addEventListener('blur', function() {
 });
 
 /**
- * Global microphone-gain shortcuts: Ctrl+Shift+Up and Ctrl+Shift+Down
- * nudge the mic gain by 3 dB and announce the new value (value first, so
- * the changing number is heard immediately on repeated presses).
+ * Global microphone-gain shortcuts: Alt+Shift+Up and Alt+Shift+Down nudge
+ * the mic gain by 3 dB and announce the new value (value first, so the
+ * changing number is heard immediately on repeated presses).  Chosen over
+ * Ctrl+Shift+Arrow (which some browsers claim natively for extending a text
+ * selection by word/paragraph, swallowing it before the page ever sees it)
+ * and over any punctuation key (position and required modifier both vary
+ * too much across world keyboard layouts).  Arrow keys have no alternate
+ * character under Alt/AltGr since they aren't printable, so this modifier
+ * pairing doesn't hit the AltGr composition trap that rules out Ctrl+Alt or
+ * Alt+Shift with a letter/digit/punctuation key.
  */
 document.addEventListener('keydown', function(e) {
-    if(e.repeat || !e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey)
+    if(e.repeat || !e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey)
         return;
     let delta;
     switch(e.key) {

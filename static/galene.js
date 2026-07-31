@@ -614,6 +614,17 @@ function setButtonsVisibility() {
 
     setVisibility('raisehandbutton', connected);
 
+    // Before joining, the chat textarea was fully focusable and typeable
+    // (nothing gated it on connection state), but submitting just threw a
+    // "Not connected" error -- a dead end for anyone tabbing/arrowing
+    // through the page, especially with a screen reader.  Hide it like the
+    // other connection-gated panels (video-container, login-container)
+    // until there's actually a connection to send to.
+    setVisibility('chat', connected);
+    // Same reasoning for the participants list: empty pre-join, but still
+    // a landable "Participants" group for browse-mode review.
+    setVisibility('users', connected);
+
     // allow multiple shared documents
     setVisibility('sharebutton', canShare);
 

@@ -103,13 +103,16 @@ function getButtonElement(id) {
 /**
  * Earcon types: internal name and human-readable label.
  */
+// `on` is the default when the user hasn't chosen: only the chat-received
+// cue ships with a sound file, so it's the only one enabled by default.  The
+// rest stay off until their sound files exist, to avoid missing-file noise.
 const earconTypes = [
     {name: 'muted', label: 'Mute'},
     {name: 'unmuted', label: 'Microphone on'},
     {name: 'raise', label: 'Raise hand'},
     {name: 'lower', label: 'Lower hand'},
     {name: 'notify', label: 'Another participant raises a hand'},
-    {name: 'message', label: 'Chat message received'},
+    {name: 'message', label: 'Chat message received', on: true},
     {name: 'sent', label: 'Chat message sent'},
     {name: 'joined', label: 'Participant joined'},
     {name: 'left', label: 'Participant left'},
@@ -122,6 +125,20 @@ const earconTypes = [
  */
 function earconSettingKey(name) {
     return 'earcon' + name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/**
+ * Whether an earcon should play: the stored choice if set, else the type's
+ * default (off for everything except chat-received).
+ * @param {string} name
+ * @returns {boolean}
+ */
+function earconEnabled(name) {
+    let v = getSettings()[earconSettingKey(name)];
+    if(typeof v === 'boolean')
+        return v;
+    let t = earconTypes.find(t => t.name === name);
+    return !!(t && t.on);
 }
 
 /**
@@ -270,7 +287,7 @@ function reflectSettings() {
     for(let t of earconTypes) {
         let box = document.getElementById('earcon-' + t.name);
         if(box)
-            box.checked = settings[earconSettingKey(t.name)] !== false;
+            box.checked = earconEnabled(t.name);
     }
 
     let ajl = document.getElementById('announce-joinleave');
@@ -5060,7 +5077,7 @@ let earcons = {};
  * @param {string} name
  */
 function playEarcon(name) {
-    if(getSettings()[earconSettingKey(name)] === false)
+    if(!earconEnabled(name))
         return;
     try {
         let a = earcons[name];

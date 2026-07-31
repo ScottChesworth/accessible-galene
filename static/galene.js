@@ -1122,7 +1122,6 @@ function setupListbox(box, activate, containerRole, isItem) {
         case 'End': next = opts.length - 1; break;
         case 'Enter':
         case ' ':
-        case 'ContextMenu':
         // Right arrow expands the item's popup menu, tree-style; the menu
         // itself closes on Left arrow (see accessibleMenu), returning here.
         case 'ArrowRight': {
@@ -1137,6 +1136,28 @@ function setupListbox(box, activate, containerRole, isItem) {
         }
         e.preventDefault();
         focusItem(opts[next]);
+    });
+
+    // The Applications/Menu key is handled via the browser's own
+    // "contextmenu" event, not a keydown case, because NVDA (and other
+    // screen readers) handle that key themselves in both browse and focus
+    // mode: they synthesize a native contextmenu event to open the browser's
+    // default menu at the review cursor, separately from whatever bubbles to
+    // the page as a keydown.  preventDefault()ing the keydown doesn't stop
+    // that, so the browser's menu appeared first and had to be dismissed
+    // with Escape before ours showed underneath.  Catching "contextmenu"
+    // directly suppresses it at the source, regardless of what triggered it
+    // (this key, Shift+F10, or a real right-click).
+    box.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        let opts = visible();
+        if(opts.length === 0)
+            return;
+        let idx = opts.indexOf(
+            /** @type{HTMLElement} */(document.activeElement));
+        let target = idx >= 0 ? opts[idx] : opts[opts.length - 1];
+        if(target && activate)
+            activate(target);
     });
 }
 
@@ -1204,8 +1225,7 @@ function setupBrowseList(box, activate, isItem) {
         case 'ArrowUp': next = idx < 0 ? opts.length - 1 : Math.max(0, idx - 1); break;
         case 'Home': next = 0; break;
         case 'End': next = opts.length - 1; break;
-        case 'Enter':
-        case 'ContextMenu': {
+        case 'Enter': {
             let it = idx >= 0 ? opts[idx] :
                 /** @type{HTMLElement} */(document.activeElement);
             if(it && isItem(it) && activate) {
@@ -1219,6 +1239,26 @@ function setupBrowseList(box, activate, isItem) {
         }
         e.preventDefault();
         focusItem(opts[next]);
+    });
+
+    // See the matching comment in setupListbox: NVDA (and other screen
+    // readers) handle the Applications/Menu key themselves, synthesizing a
+    // native contextmenu event to open the browser's default menu at the
+    // review cursor even when a keydown handler preventDefault()s the key --
+    // so the browser's menu showed first and had to be dismissed with Escape
+    // before ours appeared underneath.  Catching "contextmenu" directly
+    // suppresses it at the source.
+    box.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        let opts = visible();
+        if(opts.length === 0)
+            return;
+        let idx = opts.indexOf(
+            /** @type{HTMLElement} */(document.activeElement));
+        let it = idx >= 0 ? opts[idx] :
+            /** @type{HTMLElement} */(document.activeElement);
+        if(it && isItem(it) && activate)
+            activate(it);
     });
 }
 

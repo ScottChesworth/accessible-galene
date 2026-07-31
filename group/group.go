@@ -983,34 +983,53 @@ func GetConfiguration() (*Configuration, error) {
 	return configuration.configuration, nil
 }
 
-func (desc *Description) getPasswordPermission(creds ClientCredentials) (Permissions, error) {
-	if creds.Username == nil {
-		return Permissions{}, errors.New("username not provided")
+// lookupUser finds a registered user entry by username, matched
+// case-insensitively (an exact match wins if there happen to be more than
+// one).  Returns the canonical (as-configured) username together with the
+// entry, so a login can be matched regardless of the case typed while still
+// displaying/storing the operator's configured casing.  Passwords are never
+// touched here and remain fully case-sensitive.
+func (desc *Description) lookupUser(username string) (string, UserDescription, bool) {
+	if desc.Users == nil {
+		return "", UserDescription{}, false
 	}
-	if desc.Users != nil {
-		if c, found := desc.Users[*creds.Username]; found {
-			ok, err := c.Password.Match(creds.Password)
-			if err != nil {
-				return Permissions{}, err
-			}
-			if ok {
-				return c.Permissions, nil
-			} else {
-				return Permissions{}, ErrBadPassword
-			}
+	if u, ok := desc.Users[username]; ok {
+		return username, u, true
+	}
+	for k, u := range desc.Users {
+		if strings.EqualFold(k, username) {
+			return k, u, true
 		}
+	}
+	return "", UserDescription{}, false
+}
+
+func (desc *Description) getPasswordPermission(creds ClientCredentials) (string, Permissions, error) {
+	if creds.Username == nil {
+		return "", Permissions{}, errors.New("username not provided")
+	}
+	if canonical, u, found := desc.lookupUser(*creds.Username); found {
+		ok, err := u.Password.Match(creds.Password)
+		if err != nil {
+			return "", Permissions{}, err
+		}
+		if ok {
+			return canonical, u.Permissions, nil
+		}
+		return "", Permissions{}, ErrBadPassword
 	}
 
 	if desc.WildcardUser != nil {
 		ok, _ := desc.WildcardUser.Password.Match(creds.Password)
 		if ok {
-			return desc.WildcardUser.Permissions, nil
+			return *creds.Username, desc.WildcardUser.Permissions, nil
 		}
 	}
-	return Permissions{}, ErrNoSuchUsername
+	return "", Permissions{}, ErrNoSuchUsername
 }
 
-// Return true if there is a user entry with the given username.
+// Return true if there is a user entry with the given username, matched
+// case-insensitively (see lookupUser).
 // Always return false for an empty username.
 func (g *Group) UserExists(username string) bool {
 	g.mu.Lock()
@@ -1019,10 +1038,7 @@ func (g *Group) UserExists(username string) bool {
 }
 
 func (desc *Description) userExists(username string) bool {
-	if desc.Users == nil {
-		return false
-	}
-	_, found := desc.Users[username]
+	_, _, found := desc.lookupUser(username)
 	return found
 }
 
@@ -1065,8 +1081,9 @@ func (desc *Description) GetPermission(groupname string, creds ClientCredentials
 			username = *creds.Username
 		}
 	} else if creds.Username != nil {
-		username = *creds.Username
-		ps, err := desc.getPasswordPermission(creds)
+		var ps Permissions
+		var err error
+		username, ps, err = desc.getPasswordPermission(creds)
 		if err != nil {
 			return "", nil, err
 		}

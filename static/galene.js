@@ -4664,9 +4664,10 @@ function findUserId(user) {
     if(user in serverConnection.users)
         return user;
 
+    let lower = user.toLowerCase();
     for(let id in serverConnection.users) {
         let u = serverConnection.users[id];
-        if(u && u.username === user)
+        if(u && u.username && u.username.toLowerCase() === lower)
             return id;
     }
     return null;

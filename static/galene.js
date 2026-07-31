@@ -3280,7 +3280,16 @@ async function gotJoined(kind, group, perms, status, data, error, message) {
     // a useful control rather than the now-hidden login form.  But if we
     // are about to auto-request the microphone, don't grab focus: let the
     // browser's permission prompt take it instead.
-    if(!present)
+    //
+    // Skip this on touch devices.  On iOS a programmatic focus leaves the
+    // textarea focused but with no on-screen keyboard (iOS only raises the
+    // keyboard for a genuine user gesture).  VoiceOver's later double-tap
+    // then changes nothing about focus, so it's a no-op and the keyboard
+    // never appears.  Not auto-focusing means the user's own tap is a real
+    // focus change that brings the keyboard up.
+    let coarsePointer = window.matchMedia &&
+        window.matchMedia('(pointer: coarse)').matches;
+    if(!present && !coarsePointer)
         input.focus();
 
     // When comparing GUI modes, re-confirm which interface we're in once

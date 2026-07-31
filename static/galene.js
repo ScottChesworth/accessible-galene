@@ -142,6 +142,38 @@ function isOp() {
 /**
  * Ensure that the UI reflects the stored settings.
  */
+/**
+ * Set a range input and its adjacent <output> readout to a value.
+ * @param {string} id
+ * @param {number} val
+ */
+function setRange(id, val) {
+    let input = document.getElementById(id);
+    if(input instanceof HTMLInputElement)
+        input.value = String(val);
+    let out = document.getElementById(id + '-out');
+    if(out)
+        out.textContent = String(val);
+}
+
+/**
+ * Reflect the mic-processing settings (AGC + limiter) onto their controls.
+ */
+function reflectMicProcessing() {
+    let agc = document.getElementById('agcbox');
+    if(agc instanceof HTMLInputElement)
+        agc.checked = !!getSettings().micAGC;
+    let l = micLimiterSettings();
+    let lim = document.getElementById('limiterbox');
+    if(lim instanceof HTMLInputElement)
+        lim.checked = l.enabled;
+    setRange('limiter-threshold', l.threshold);
+    setRange('limiter-ratio', l.ratio);
+    setRange('limiter-knee', l.knee);
+    setRange('limiter-attack', l.attack);
+    setRange('limiter-release', l.release);
+}
+
 function reflectSettings() {
     let settings = getSettings();
     let store = false;
@@ -232,6 +264,8 @@ function reflectSettings() {
 
     if(settings.hasOwnProperty('hqaudio'))
         getInputElement('hqaudiobox').checked = settings.hqaudio;
+
+    reflectMicProcessing();
 
     for(let t of earconTypes) {
         let box = document.getElementById('earcon-' + t.name);
@@ -647,6 +681,39 @@ getInputElement('hqaudiobox').onchange = function(e) {
     updateSettings({hqaudio: this.checked});
     replaceCameraStream();
 };
+
+// Microphone processing controls (browser AGC + our limiter), exposed for
+// testing.  AGC and limiter enable are constraint/graph changes, so they
+// rebuild the stream; the limiter parameters are AudioParams applied live to
+// the running node without a rebuild.
+{
+    getInputElement('agcbox').onchange = function() {
+        updateSettings({micAGC: this.checked});
+        replaceCameraStream();
+    };
+    getInputElement('limiterbox').onchange = function() {
+        updateSettings({micLimiter: this.checked});
+        replaceCameraStream();
+    };
+    let params = [
+        ['limiter-threshold', 'micLimiterThreshold'],
+        ['limiter-ratio', 'micLimiterRatio'],
+        ['limiter-knee', 'micLimiterKnee'],
+        ['limiter-attack', 'micLimiterAttack'],
+        ['limiter-release', 'micLimiterRelease'],
+    ];
+    for(let [id, key] of params) {
+        getInputElement(id).oninput = function() {
+            let v = parseFloat(this.value);
+            updateSettings({[key]: v});
+            let out = document.getElementById(id + '-out');
+            if(out)
+                out.textContent = String(v);
+            if(micLimiterNode)
+                applyLimiterSettings(micLimiterNode);
+        };
+    }
+}
 
 for(let t of earconTypes) {
     let box = document.getElementById('earcon-' + t.name);
@@ -1974,10 +2041,15 @@ async function addLocalMedia(localId) {
     }
 
     if(audio) {
+        // Browser AGC normalises the capture toward a fixed target level
+        // (boosting quiet, attenuating loud), which cancels the mic-gain
+        // slider in both directions.  Default it off so the slider and our
+        // downstream limiter (see applyMicGain) are in charge; exposed as a
+        // setting for testing.
+        audio.autoGainControl = !!settings.micAGC;
         if(!settings.preprocessing) {
             audio.echoCancellation = false;
             audio.noiseSuppression = false;
-            audio.autoGainControl = false;
         }
         if(settings.hqaudio)
             audio.channelCount = 2;
@@ -2176,6 +2248,7 @@ function findUpMedia(label) {
 // local microphone stream.
 let micAudioContext = null;
 let micGainNode = null;
+let micLimiterNode = null;
 let micRawStream = null;
 
 /**
@@ -2187,6 +2260,38 @@ function micGainValue() {
     if(typeof g !== 'number' || !(g >= 0))
         g = 100;
     return g / 100;
+}
+
+/**
+ * The limiter configuration (from settings, with defaults).  Times are in
+ * milliseconds for the UI; the node wants seconds (see applyLimiterSettings).
+ * @returns {{enabled: boolean, threshold: number, ratio: number,
+ *            knee: number, attack: number, release: number}}
+ */
+function micLimiterSettings() {
+    let s = getSettings();
+    let num = (v, d) => (typeof v === 'number' ? v : d);
+    return {
+        enabled: s.micLimiter !== false,
+        threshold: num(s.micLimiterThreshold, -3),
+        ratio: num(s.micLimiterRatio, 20),
+        knee: num(s.micLimiterKnee, 0),
+        attack: num(s.micLimiterAttack, 3),
+        release: num(s.micLimiterRelease, 250),
+    };
+}
+
+/**
+ * Push the stored limiter settings onto a DynamicsCompressorNode.
+ * @param {DynamicsCompressorNode} node
+ */
+function applyLimiterSettings(node) {
+    let l = micLimiterSettings();
+    node.threshold.value = l.threshold;
+    node.ratio.value = l.ratio;
+    node.knee.value = l.knee;
+    node.attack.value = l.attack / 1000;
+    node.release.value = l.release / 1000;
 }
 
 /**
@@ -2203,6 +2308,7 @@ function teardownMicGain() {
         micAudioContext = null;
     }
     micGainNode = null;
+    micLimiterNode = null;
 }
 
 /**
@@ -2229,7 +2335,19 @@ function applyMicGain(stream) {
         micGainNode.gain.value = micGainValue();
         let dest = micAudioContext.createMediaStreamDestination();
         source.connect(micGainNode);
-        micGainNode.connect(dest);
+        // Optional limiter after the user gain, standing in for the browser
+        // AGC we disable.  It only acts above threshold, so it never touches
+        // quiet boosted speech, but it catches a cranked mic before it clips
+        // into distortion.  Parameters are exposed in Settings for testing.
+        if(micLimiterSettings().enabled) {
+            micLimiterNode = micAudioContext.createDynamicsCompressor();
+            applyLimiterSettings(micLimiterNode);
+            micGainNode.connect(micLimiterNode);
+            micLimiterNode.connect(dest);
+        } else {
+            micLimiterNode = null;
+            micGainNode.connect(dest);
+        }
         return dest.stream;
     } catch(e) {
         console.warn("Couldn't set up microphone gain:", e);

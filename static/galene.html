@@ -244,6 +244,50 @@
           </form>
         </fieldset>
 
+        <fieldset id="micprocessing">
+          <legend>Microphone processing (testing)</legend>
+
+          <form>
+            <input id="agcbox" type="checkbox"/>
+            <label for="agcbox">Automatic gain control (browser AGC)</label>
+          </form>
+
+          <form>
+            <input id="limiterbox" type="checkbox" checked/>
+            <label for="limiterbox">Limiter</label>
+          </form>
+
+          <p class="range-row">
+            <label for="limiter-threshold" class="sidenav-label-first">Threshold (dBFS):</label>
+            <input id="limiter-threshold" type="range" min="-60" max="0" step="1" value="-3"/>
+            <output id="limiter-threshold-out" for="limiter-threshold">-3</output>
+          </p>
+
+          <p class="range-row">
+            <label for="limiter-ratio" class="sidenav-label-first">Ratio (x:1):</label>
+            <input id="limiter-ratio" type="range" min="1" max="20" step="1" value="20"/>
+            <output id="limiter-ratio-out" for="limiter-ratio">20</output>
+          </p>
+
+          <p class="range-row">
+            <label for="limiter-knee" class="sidenav-label-first">Knee (dB):</label>
+            <input id="limiter-knee" type="range" min="0" max="40" step="1" value="0"/>
+            <output id="limiter-knee-out" for="limiter-knee">0</output>
+          </p>
+
+          <p class="range-row">
+            <label for="limiter-attack" class="sidenav-label-first">Attack (ms):</label>
+            <input id="limiter-attack" type="range" min="0" max="100" step="1" value="3"/>
+            <output id="limiter-attack-out" for="limiter-attack">3</output>
+          </p>
+
+          <p class="range-row">
+            <label for="limiter-release" class="sidenav-label-first">Release (ms):</label>
+            <input id="limiter-release" type="range" min="0" max="1000" step="10" value="250"/>
+            <output id="limiter-release-out" for="limiter-release">250</output>
+          </p>
+        </fieldset>
+
         <fieldset>
           <legend>Other Settings</legend>
 

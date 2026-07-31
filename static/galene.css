@@ -1089,6 +1089,29 @@ h1 {
     margin-top: 15px;
 }
 
+.range-row {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.range-row label {
+    margin-top: 0;
+    flex: 0 0 auto;
+}
+
+.range-row input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.range-row output {
+    flex: 0 0 3ch;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
 .sidenav-header {
     height: 56px;
 }

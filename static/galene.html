@@ -25,8 +25,6 @@
   </head>
 
   <body>
-    <div id="announcer" role="alert" aria-live="assertive" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></div>
-    <div id="live-polite" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></div>
     <div id="main" class="app" role="application">
       <div class="row full-height">
         <nav id="left-sidebar">
@@ -422,6 +420,14 @@
         <button value="invite">Invite</button>
       </form>
     </dialog>
+
+    <!-- Visually hidden ARIA live regions for spoken announcements.  Placed
+         at the end of the document, not the top, so a screen reader's
+         browse-mode review starting from the top of the page lands on real
+         content first instead of these administrative nodes; position in
+         the DOM has no effect on when live-region announcements fire. -->
+    <div id="announcer" role="alert" aria-live="assertive" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></div>
+    <div id="live-polite" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></div>
 
     <script src="/protocol.js" defer></script>
     <script src="/third-party/toastify/toastify.js" defer></script>

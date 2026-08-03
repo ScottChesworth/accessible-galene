@@ -93,7 +93,13 @@
                   <div class="close-chat" id="close-chat"  title="Hide chat">
                     <span class="close-icon"></span>
                   </div>
-                  <div id="box" role="log" aria-live="polite" aria-label="Chat messages"></div>
+                  <!-- Deliberately not a live region: iOS VoiceOver reads
+                       any addition to a live-region ancestor regardless of
+                       aria-live on the added node itself or brief toggles of
+                       the ancestor's own aria-live, so every spoken chat
+                       notification is instead fired explicitly via
+                       announcePolite() (see addToChatbox). -->
+                  <div id="box" role="log" aria-live="off" aria-label="Chat messages"></div>
                   <div class="reply">
                     <form id="inputform">
                       <textarea id="input" class="form-reply" aria-label="Type a message"></textarea>

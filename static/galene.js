@@ -1446,15 +1446,6 @@ if(useListboxWidgets()) {
                      'listbox', c => c.getAttribute('role') === 'option');
 }
 
-// Keep the chat's live region announcing new messages but not the periodic
-// relative-time updates: "additions" covers node additions (new messages)
-// while ignoring in-place text changes (the time refresh).
-{
-    let box = document.getElementById('box');
-    if(box)
-        box.setAttribute('aria-relevant', 'additions');
-}
-
 /**
  * Visible, keyboard-focusable elements within the app, in document order.
  * The collapsed settings sidebar is excluded.
@@ -4003,11 +3994,8 @@ function refreshChatTimes() {
     let box = document.getElementById('box');
     if(!box)
         return;
-    // Editing the time in place (characterData) avoids a node-addition
-    // announcement, but a polite live region still announces text changes,
-    // so a screen reader would re-read every message's time each minute.
-    // Suppress the region around the refresh and restore it on the next tick.
-    box.setAttribute('aria-live', 'off');
+    // #box is permanently aria-live="off" (see markup), so none of this
+    // needs to worry about live announcement at all.
     function setText(el, s) {
         if(el.firstChild && el.firstChild.nodeType === 3)
             el.firstChild.nodeValue = s;
@@ -4025,7 +4013,13 @@ function refreshChatTimes() {
         let e = /** @type{HTMLElement} */(st);
         setText(e, ' ' + relativeTime(new Date(Number(e.dataset.time))) + '.');
     }
-    setTimeout(() => box.setAttribute('aria-live', 'polite'), 200);
+    // Each row's aria-label is now the only accessible content for the
+    // message (see addToChatbox); keep its relative time current too.
+    for(let row of box.querySelectorAll('.message-row[data-time]')) {
+        let r = /** @type{HTMLElement} */(row);
+        let t = relativeTime(new Date(Number(r.dataset.time)));
+        r.setAttribute('aria-label', `${r.dataset.baseLabel} ${t}.`);
+    }
 }
 setInterval(refreshChatTimes, 60000);
 
@@ -4072,6 +4066,20 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
     row.setAttribute('role', native ? 'option' : 'listitem');
     let container = document.createElement('div');
     container.classList.add('message');
+    // Make each row a single, atomic read for iOS VoiceOver.  Two narrower
+    // attempts didn't fix it: role="presentation" here alone (container was
+    // still a visually distinct "bubble" -- see .message in CSS -- possibly
+    // read as its own stop) and giving row an explicit aria-label without
+    // hiding anything (the children still got read as their own separate
+    // pass regardless).  So container -- which holds all of the row's
+    // visible content (sender heading/name, body, timestamp) -- is now
+    // aria-hidden entirely, and row carries an explicit aria-label with the
+    // full message text instead (set below, near the insert).  Trade-off:
+    // this costs in-message granular navigation -- no more jumping straight
+    // to a heading or timestamp within a message -- in exchange for each
+    // message reliably reading exactly once.
+    container.setAttribute('role', 'presentation');
+    container.setAttribute('aria-hidden', 'true');
     row.appendChild(container);
     let footer = document.createElement('p');
     footer.classList.add('message-footer');
@@ -4135,6 +4143,18 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         // Trailing period separates the time from the "N of M" position the
         // listbox speaks after it, so it is easy to tune out.
         st.textContent = ` ${relativeTime(t)}.`;
+        // Permanently opt this element out of live announcement, rather
+        // than relying on refreshChatTimes() to toggle the box's aria-live
+        // off/on around the batch update: after a long gap (e.g. iOS
+        // suspending timers while backgrounded), several messages can have
+        // their relative time refreshed together, and toggling the
+        // ancestor's aria-live isn't reliably honoured by iOS VoiceOver --
+        // it read out every updated time in a row before the actual new
+        // message.  A static aria-live="off" on the element itself is not
+        // timing-dependent: nested live-region politeness always overrides
+        // the ancestor's, so this text can be rewritten freely without ever
+        // being its own announcement source.
+        st.setAttribute('aria-live', 'off');
         return st;
     }
 
@@ -4213,6 +4233,9 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
                 tm.className = 'message-time message-timestamp';
                 tm.dataset.time = String(displayTime.getTime());
                 tm.textContent = relativeTime(displayTime) + '.';
+                // See srTimeSpan() above: a static aria-live="off" keeps later
+                // in-place refreshes from ever announcing on their own.
+                tm.setAttribute('aria-live', 'off');
                 container.appendChild(tm);
             }
         }
@@ -4221,48 +4244,130 @@ function addToChatbox(id, peerId, dest, nick, time, privileged, history, kind, m
         lastMessage.dest = (dest || null);
         lastMessage.time = (time || null);
     } else {
+        // An action ("*Alice waves") should read as one continuous phrase,
+        // the way it already does on NVDA/JAWS.  iOS VoiceOver instead
+        // paused at every sibling element boundary here, even during
+        // continuous reading, since asterisk/name/body were three separate
+        // elements with nothing tying them together.  role="text" is a
+        // WebKit-specific role made for exactly this: it tells VoiceOver to
+        // treat a run of inline content as a single phrase instead of
+        // stopping at each nested element.  Other browsers/ATs ignore the
+        // unrecognised role value and fall back to normal (already-working)
+        // behaviour, so this is safe everywhere else.
+        let wrap = document.createElement('span');
+        wrap.setAttribute('role', 'text');
         let asterisk = document.createElement('span');
         asterisk.textContent = '*';
         asterisk.classList.add('message-me-asterisk');
         let user = document.createElement('span');
-        user.textContent = nick || '(anon)';
+        // Trailing space: needed for correct word separation once merged
+        // into one phrase (the visible gap is otherwise CSS margin only,
+        // which isn't part of the accessible text).
+        user.textContent = (nick || '(anon)') + ' ';
         user.classList.add('message-me-user');
         body.classList.add('message-me-content');
         asterisk.setAttribute('aria-hidden', 'true');
-        container.appendChild(asterisk);
-        container.appendChild(user);
-        container.appendChild(body);
-        if(displayTime)
-            container.appendChild(srTimeSpan(displayTime));
+        wrap.appendChild(asterisk);
+        wrap.appendChild(user);
+        wrap.appendChild(body);
+        container.appendChild(wrap);
+        // A visible timestamp was missing entirely for action messages
+        // (only the invisible sr-only reading existed); add one, following
+        // the same native/web split normal messages already use.
+        if(displayTime) {
+            if(native) {
+                // Visual only; the reading comes from srTimeSpan below, kept
+                // out of the role="text" phrase above so it isn't merged in.
+                let tm = document.createElement('span');
+                tm.textContent = relativeTime(displayTime);
+                tm.dataset.time = String(displayTime.getTime());
+                tm.classList.add('message-time');
+                tm.setAttribute('aria-hidden', 'true');
+                container.appendChild(tm);
+                container.appendChild(srTimeSpan(displayTime));
+            } else {
+                // Web mode: visible and accessible in one, like normal
+                // messages -- no separate sr-only span needed here.
+                let tm = document.createElement('span');
+                tm.className = 'message-time message-timestamp';
+                tm.dataset.time = String(displayTime.getTime());
+                tm.textContent = relativeTime(displayTime) + '.';
+                tm.setAttribute('aria-live', 'off');
+                container.appendChild(tm);
+            }
+        }
         container.classList.add('message-me');
         lastMessage = {};
     }
     container.appendChild(footer);
 
     let box = document.getElementById('box');
-    // Your own message would otherwise be read back in full by the chat's
-    // live region.  Suppress that around the insert and just say "Sent".
-    // Others' messages and replayed history announce normally.
+    // #box is permanently aria-live="off" (see markup) -- not toggled
+    // around this insert, and not relying on a static aria-live="off" set
+    // on just the new row either.  Both were tried and both still let
+    // VoiceOver read the row a second time on iOS: aria-relevant/aria-live
+    // on a live-region ancestor governs whether an ADDITION gets announced
+    // at all, using the added subtree's own content, regardless of any
+    // aria-live value on the added node itself (that only affects later
+    // mutations to a node already in the tree, which is why it did fix the
+    // separate timestamp-refresh problem) -- and a brief ancestor toggle
+    // races against the AT's own accessibility-tree update, which can lag
+    // past whatever short window the toggle is restored in. Making #box
+    // permanently non-live sidesteps both failure modes at once: nothing
+    // about inserting a row can trigger its own announcement, so every
+    // spoken chat notification -- own message, someone else's, or a local/
+    // system message -- goes through the explicit announcePolite() channel
+    // below instead.  Replayed history intentionally announces nothing.
     let ownLive = !history && peerId && serverConnection &&
         peerId === serverConnection.id;
-    if(ownLive)
-        box.setAttribute('aria-live', 'off');
+    let otherLive = !history && peerId && serverConnection &&
+        peerId !== serverConnection.id;
+    let localLive = !history && !peerId;
+    // row is now the sole accessible content for this message (container is
+    // aria-hidden -- see above), so its aria-label carries everything,
+    // including the relative time.  The base text (sender/body wording)
+    // never changes once sent, but the time does -- store it separately in
+    // baseLabel so refreshChatTimes() can rebuild the full label with a
+    // fresh relative time each pass, the same way it already refreshes the
+    // (now-hidden) visible timestamps.
+    let baseLabel = kind === 'me' ?
+        `${sender} ${body.textContent}` :
+        (sender ? `${sender}: ${body.textContent}` : body.textContent);
+    row.dataset.baseLabel = baseLabel;
+    if(displayTime) {
+        row.dataset.time = String(displayTime.getTime());
+        row.setAttribute('aria-label',
+            `${baseLabel} ${relativeTime(displayTime)}.`);
+    } else {
+        row.setAttribute('aria-label', baseLabel);
+    }
     box.appendChild(row);
+    // WebKit doesn't rebuild its accessibility tree synchronously with a DOM
+    // mutation -- it's recomputed on its own schedule, tied to layout, and
+    // can noticeably lag behind a plain appendChild, which is why a new
+    // message doesn't always show up in VoiceOver's flick order right away.
+    // Reading a geometry property forces a synchronous layout instead of
+    // leaving it for whenever WebKit gets around to it, which in practice
+    // nudges the accessibility tree to catch up sooner.
+    void row.offsetHeight;
     if(box.scrollHeight > box.clientHeight) {
         box.scrollTop = box.scrollHeight - box.clientHeight;
     }
     if(ownLive) {
         announcePolite('Sent');
         playEarcon('sent');
-        setTimeout(() => box.setAttribute('aria-live', 'polite'), 200);
-    }
-
-    // A live chat message from someone else gets an audible cue (on by
-    // default; toggled under Sound cues).  Skips your own messages, replayed
-    // history, and system lines (which have no peerId).
-    if(!history && peerId && serverConnection &&
-       peerId !== serverConnection.id)
+    } else if(otherLive) {
         playEarcon('message');
+        // Action messages ("/me does a thing") read as one narrated phrase
+        // ("Scott does a thing"), not "Name: text" like a normal message --
+        // matching how the row itself is built (see the role="text" wrap
+        // above).
+        announcePolite(kind === 'me' ?
+            `${sender} ${body.textContent}` :
+            `${sender}: ${body.textContent}`);
+    } else if(localLive) {
+        announcePolite(body.textContent);
+    }
 
     return;
 }

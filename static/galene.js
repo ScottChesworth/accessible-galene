@@ -652,7 +652,7 @@ function setLocalMute(mute, reflect) {
     // the accessible name on toggle made screen readers re-announce the
     // button on top of the polite status message (doubled speech).  The
     // icon is aria-hidden, so swapping it is silent.
-    button.setAttribute('aria-pressed', mute ? 'false' : 'true');
+    button.setAttribute('aria-checked', mute ? 'false' : 'true');
     if(icon) {
         icon.classList.toggle('fa-microphone-slash', mute);
         icon.classList.toggle('fa-microphone', !mute);
@@ -856,12 +856,12 @@ window.addEventListener('pointerup', function(e) {
 function setRaiseHandButton(raised) {
     let button = document.getElementById('raisehandbutton');
     if(button)
-        button.setAttribute('aria-pressed', raised ? 'true' : 'false');
+        button.setAttribute('aria-checked', raised ? 'true' : 'false');
 }
 
 getButtonElement('raisehandbutton').onclick = function(e) {
     e.preventDefault();
-    let newRaised = this.getAttribute('aria-pressed') !== 'true';
+    let newRaised = this.getAttribute('aria-checked') !== 'true';
     serverConnection.userAction(
         'setdata', serverConnection.id,
         {'raisehand': newRaised ? true : null},

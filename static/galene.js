@@ -2107,7 +2107,7 @@ async function addLocalMedia(localId) {
     let settings = getSettings();
 
     /** @type{boolean|MediaTrackConstraints} */
-    let audio = settings.audio ? {deviceId: settings.audio} : false;
+    let audio = settings.audio ? {deviceId: settings.audio} : true;
     /** @type{boolean|MediaTrackConstraints} */
     // Audio-only build: never request the camera, for privacy.
     let video = false;

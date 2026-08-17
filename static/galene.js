@@ -5257,17 +5257,14 @@ function announcePolite(message) {
     let el = document.getElementById('live-polite');
     if(!el)
         return;
-    // Append a new node rather than mutating existing text: TalkBack/Chrome
-    // on Android doesn't reliably fire an accessibility event for a
-    // textContent change on a node it's already seen, even with the
-    // clear-then-refill trick that works for VoiceOver/NVDA. A DOM
-    // addition is detected far more consistently. role="status" already
-    // implies aria-relevant="additions text", so no markup change needed.
-    let span = document.createElement('span');
-    span.textContent = message;
-    el.appendChild(span);
-    while(el.childNodes.length > 5)
-        el.removeChild(el.firstChild);
+    // A plain textContent write is enough on every stack we support -- no
+    // platform-specific dance needed.  We previously appended a fresh node
+    // instead, on the theory that TalkBack/Chrome misses textContent
+    // changes; testing against TalkBack 16.0 / Android 16 / Chrome 133
+    // showed it announces this just fine, and the extra nodes made
+    // VoiceOver re-read the whole region (role="status" implies
+    // aria-atomic="true") on every new message.
+    el.textContent = message;
 }
 
 /**

@@ -984,6 +984,9 @@ h1 {
     position: relative;
     border: 2px solid rgba(0,0,0,0);
     background: #80808014;
+    /* .media has no visible box (audio-only build, see below), so give the
+       tile an explicit height for the label/controls to sit in. */
+    min-height: 56px;
 }
 
 .peer-active {
@@ -994,11 +997,20 @@ h1 {
     display: none;
 }
 
+/* Audio-only build: there's never a video track, so an unstyled <video>
+   element renders as an opaque black box at whatever size it's given
+   (WebKit especially, on iOS this was large enough to cover other UI).
+   Keep it playing audio but out of view -- same visually-hidden pattern
+   as #announcer/#live-polite. */
 .media {
-    width: 100%;
-    max-height: calc(var(--vh, 1vh) * 100 - 76px);
-    padding-bottom: 20px;
-    object-fit: contain;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    border: 0;
 }
 
 .media-failed {

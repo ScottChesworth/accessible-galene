@@ -433,8 +433,8 @@
          browse-mode review starting from the top of the page lands on real
          content first instead of these administrative nodes; position in
          the DOM has no effect on when live-region announcements fire. -->
-    <div id="announcer" role="alert" aria-live="assertive" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></div>
-    <div id="live-polite" role="status" aria-live="polite" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;"></div>
+    <div id="announcer" role="alert" aria-live="assertive" class="sr-only"></div>
+    <div id="live-polite" role="status" aria-live="polite" class="sr-only"></div>
 
     <script src="/protocol.js" defer></script>
     <script src="/third-party/toastify/toastify.js" defer></script>

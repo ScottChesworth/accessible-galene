@@ -1,0 +1,27 @@
+body {
+    font-family: sans-serif;
+    font-size: 18px;
+    line-height: 1.5;
+    max-width: 44em;
+    margin: 0 auto;
+    padding: 1em;
+}
+textarea {
+    /* Both textarea and button are inline-block by default, so without
+       this they sit side by side and the full-width box overflows. */
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    font-family: monospace;
+    font-size: 15px;
+}
+button {
+    display: block;
+    font-size: 18px;
+    padding: 0.6em 1em;
+    margin: 0.3em 0;
+}
+.sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0;
+    margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;
+}

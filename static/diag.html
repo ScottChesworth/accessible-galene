@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser diagnostic</title>
+<link rel="stylesheet" href="diag.css">
+</head>
+<body>
+
+<h1>Browser diagnostic</h1>
+
+<div id="insecure-warning"></div>
+
+<p>This page checks what your browser can do. Nothing is sent anywhere
+automatically. Work down the page, then copy the Results box at the end
+and send it back.</p>
+
+<noscript>
+<p><strong>Important: JavaScript did not run in this browser.</strong>
+Please say so in your reply, as that on its own is a useful result.</p>
+</noscript>
+
+<h2>1. Automatic report</h2>
+
+<p>This box fills in by itself. You do not need to do anything here.</p>
+
+<textarea id="auto" rows="16" readonly aria-label="Automatic browser report">JavaScript did not run.</textarea>
+
+<h2>2. Live region test</h2>
+
+<p>Activate the button below. Your screen reader should then speak or
+braille the words "live region test succeeded" without you moving to it.
+It may take up to two seconds.</p>
+
+<button type="button" id="livebtn">Run live region test</button>
+
+<div id="live-a" role="status" aria-live="polite" class="sr-only"></div>
+
+<p>Did your screen reader announce anything by itself after you pressed
+that button? Type yes or no, and what it said, in the notes box in
+section 5.</p>
+
+<h2>3. Toggle button test</h2>
+
+<p>The button below is a toggle. Move to it and note how your screen
+reader describes it, then activate it and note what changes. We expect
+something like "not pressed" or "off" first, then "pressed" or "on".</p>
+
+<button type="button" id="togglebtn" aria-pressed="false">Example toggle</button>
+
+<h2>4. Microphone test</h2>
+
+<p><strong>Please read before activating.</strong> The button below asks
+for permission to use the microphone. A permission prompt may appear
+that you have to answer. Nothing is recorded and no audio leaves the
+device.</p>
+
+<button type="button" id="micbtn">Request microphone access</button>
+
+<p>Result of the microphone test:</p>
+
+<textarea id="micresult" rows="4" readonly aria-label="Microphone test result">Not run yet.</textarea>
+
+<h2>5. Your notes</h2>
+
+<p>Type anything you noticed here, especially for sections 2 and 3. Also
+please say what device you are using, what screen reader, and which
+browser you opened this page in. If the device has more than one browser
+available, say which one this was.</p>
+
+<textarea id="notes" rows="8" aria-label="Your notes"></textarea>
+
+<h2>6. Results to send back</h2>
+
+<p>Activate the Copy button below. It collects everything from this page
+and puts it straight on the clipboard, so you should not need to select
+any text by hand. Then paste it into your reply.</p>
+
+<button type="button" id="copy">Copy results to clipboard</button>
+
+<p id="copystatus" role="status">Not copied yet.</p>
+
+<p>If copying did not work, the same text is in the box below and can be
+selected and copied by hand instead.</p>
+
+<button type="button" id="gather">Gather results into the box</button>
+
+<textarea id="results" rows="24" aria-label="Results to copy and send"></textarea>
+
+<script src="diag.js"></script>
+
+</body>
+</html>
